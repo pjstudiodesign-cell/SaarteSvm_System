@@ -33,47 +33,79 @@ def aplicar_estilo():
         </style>
     """, unsafe_allow_html=True)
 
-# 3. Busca de Dados (FORÇANDO ATUALIZAÇÃO)
+# 3. Busca de Dados
 def buscar_dados_empresa():
-    conn = sqlite3.connect('saartesvm_data.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
-    res = cursor.fetchone()
-    conn.close()
-    if res:
-        return res
-    return ("SAARTESVM", "Studio Criativo", "", "", "")
+    try:
+        conn = sqlite3.connect('saartesvm_data.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
+        res = cursor.fetchone()
+        conn.close()
+        if res: return res
+    except: pass
+    return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# 4. Funções de PDF (CIRÚRGICAS)
+# 4. Geração de PDF com Dados Completos
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs):
     try:
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.add_page()
-        # Cabeçalho Escuro
-        pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 65, 'F')
         
-        # NOME DA EMPRESA (Puxando direto da variável info)
-        pdf.set_y(15); pdf.set_font("Arial", 'B', 26); pdf.set_text_color(212, 175, 55)
+        # Cabeçalho Escuro (Mantido conforme as imagens)
+        pdf.set_fill_color(20, 20, 20)
+        pdf.rect(0, 0, 210, 65, 'F')
+        
+        # Nome da Empresa (Destaque Dourado)
+        pdf.set_y(10)
+        pdf.set_font("Arial", 'B', 26)
+        pdf.set_text_color(212, 175, 55)
         pdf.cell(0, 15, str(info[0]).upper(), ln=True, align='C')
         
-        # SLOGAN
-        pdf.set_font("Arial", 'I', 12); pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 8, str(info[1]), ln=True, align='C')
+        # Slogan / Subtítulo
+        pdf.set_font("Arial", 'I', 11)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 6, str(info[1]), ln=True, align='C')
         
-        # Corpo do Orçamento
-        pdf.set_y(75); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 12)
+        # --- NOVIDADE: Dados de Contato e Endereço no Cabeçalho ---
+        pdf.set_font("Arial", '', 9)
+        pdf.set_text_color(200, 200, 200)
+        contato_info = f"WhatsApp: {info[2]} | Email: {info[3]}"
+        pdf.cell(0, 6, contato_info, ln=True, align='C')
+        if info[4]: # Se tiver endereço cadastrado
+            pdf.multi_cell(0, 5, f"Endereço: {info[4]}", align='C')
+        
+        # Corpo do Orçamento (Preservado)
+        pdf.set_y(75)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", 'B', 12)
         pdf.cell(100, 10, f"CLIENTE: {str(cliente).upper()}", ln=0)
         pdf.cell(0, 10, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
-        pdf.ln(10); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "1. DESCRICAO DO SERVICO", ln=True)
-        pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{servico}")
+        
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "1. DESCRICAO DO SERVICO", ln=True)
+        pdf.set_font("Arial", '', 11)
+        pdf.multi_cell(0, 7, f"{servico}")
+        
         if obs:
-            pdf.ln(2); pdf.set_font("Arial", 'B', 11); pdf.cell(10, 7, "Obs: "); pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{obs}")
-        pdf.ln(5); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "2. CONDICOES", ln=True)
-        pdf.set_font("Arial", '', 11); pdf.cell(0, 8, f"- Prazo: {prazo} | Revisoes: {rev}", ln=True)
-        pdf.cell(0, 8, f"- Pagamento: {pgto}", ln=True)
-        pdf.set_y(-40); pdf.set_font("Arial", 'B', 18)
+            pdf.ln(2)
+            pdf.set_font("Arial", 'B', 11)
+            pdf.cell(10, 7, "Obs: ")
+            pdf.set_font("Arial", '', 11)
+            pdf.multi_cell(0, 7, f"{obs}")
+            
+        pdf.ln(5)
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "2. CONDICOES", ln=True)
+        pdf.set_font("Arial", '', 11)
+        pdf.cell(0, 8, f"- Prazo: {prazo} | Revisões: {rev}", ln=True)
+        pdf.cell(0, 8, f"- Forma de Pagamento: {pgto}", ln=True)
+        
+        pdf.set_y(-40)
+        pdf.set_font("Arial", 'B', 18)
         pdf.cell(0, 15, f"INVESTIMENTO TOTAL: R$ {valor:,.2f}", ln=True, align='R')
+        
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
@@ -82,20 +114,25 @@ def gerar_pdf_recibo(cliente, servico, valor):
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_draw_color(212, 175, 55); pdf.rect(5, 5, 200, 120)
-        pdf.set_font("Arial", 'B', 18); pdf.set_y(15); pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
-        pdf.ln(10); pdf.set_font("Arial", '', 12)
-        texto = f"Recebemos de {str(cliente).upper()}, a importancia de R$ {valor:,.2f} referente ao servico de: {servico}."
+        pdf.set_draw_color(212, 175, 55)
+        pdf.rect(5, 5, 200, 120)
+        pdf.set_font("Arial", 'B', 18)
+        pdf.set_y(15)
+        pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
+        pdf.ln(10)
+        pdf.set_font("Arial", '', 12)
+        texto = f"Recebemos de {str(cliente).upper()}, a importância de R$ {valor:,.2f} referente ao serviço de: {servico}."
         pdf.multi_cell(0, 10, texto, align='L')
-        pdf.ln(10); pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
-        if info and info[4]:
-            pdf.ln(5); pdf.set_font("Arial", 'I', 9); pdf.cell(0, 5, f"Endereco: {info[4]}", ln=True, align='C')
-        pdf.ln(15); pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
-        pdf.set_font("Arial", 'B', 10); pdf.cell(0, 5, str(info[0]), ln=True, align='C')
+        pdf.ln(10)
+        pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
+        pdf.ln(15)
+        pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(0, 5, str(info[0]), ln=True, align='C')
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# 5. Banco de Dados (Blindado)
+# 5. Banco de Dados
 def iniciar_db():
     conn = sqlite3.connect('saartesvm_data.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -105,20 +142,19 @@ def iniciar_db():
         status_final TEXT, status_integral TEXT, prazo_salvo TEXT, pagamento_salvo TEXT, 
         revisao_salva TEXT, obs_salva TEXT)""")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY, nome_studio TEXT, sub_titulo TEXT, contato TEXT, email TEXT, endereco TEXT)")
-    
-    # Garantir que o ID 1 existe
-    cursor.execute("SELECT COUNT(*) FROM config WHERE id=1")
+    cursor.execute("SELECT COUNT(*) FROM config")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO config (id, nome_studio, sub_titulo, contato, email, endereco) VALUES (1, 'SAARTESVM', 'Studio Criativo', '', '', '')")
+        cursor.execute("INSERT INTO config (id, nome_studio, sub_titulo, contato, email, endereco) VALUES (1, 'SaarteSvm', 'Studio Criativo', '', '', '')")
         conn.commit()
     return conn
 
-# 6. Interface
+# 6. Interface Principal
 def main():
     aplicar_estilo()
     conn = iniciar_db()
     cursor = conn.cursor()
     info_sidebar = buscar_dados_empresa()
+    
     st.sidebar.title(f"⚜️ {info_sidebar[0]}")
     menu = ["Painel", "Novo Job", "Gestão de Projetos", "Configurações"]
     escolha = st.sidebar.radio("Navegar:", menu)
@@ -129,11 +165,11 @@ def main():
         total_rec = 0.0; total_pend = 0.0
         if not df.empty:
             for _, r in df.iterrows():
-                v_total = r['valor'] or 0; v_ent = r['valor_entrada'] or 0; v_fin = r['valor_final'] or 0
+                v_total = r['valor'] or 0
                 if r['status_integral'] == 'Recebido': total_rec += v_total
                 else:
-                    total_rec += (v_ent if r['status_entrada'] == 'Recebido' else 0)
-                    total_rec += (v_fin if r['status_final'] == 'Recebido' else 0)
+                    total_rec += (r['valor_entrada'] if r['status_entrada'] == 'Recebido' else 0)
+                    total_rec += (r['valor_final'] if r['status_final'] == 'Recebido' else 0)
             total_pend = (df['valor'].sum() or 0) - total_rec
         col1, col2 = st.columns(2)
         with col1: st.metric("Total em Caixa", f"R$ {total_rec:,.2f}")
@@ -155,7 +191,7 @@ def main():
                         prazo_salvo, pagamento_salvo, revisao_salva, obs_salva) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (n, ser, v, "Em Produção", datetime.now().strftime("%d/%m/%Y"), tel, v/2, "Pendente", v/2, "Pendente", "Pendente", prz, pag, rev, obs_in))
                     conn.commit(); st.success("Orçamento Salvo!")
-                else: st.error("Preencha os campos.")
+                else: st.error("Preencha os campos obrigatórios.")
 
     elif escolha == "Gestão de Projetos":
         st.title("⚜️ Gestão e Financeiro")
@@ -169,35 +205,30 @@ def main():
                 s_fin = col3.selectbox("Final", ["Pendente", "Recebido"], index=0 if r['status_final'] == "Pendente" else 1, key=f"f{r['id']}")
                 
                 c_at, c_orc, c_rec, c_del = st.columns(4)
-                
                 if c_at.button("Atualizar", key=f"s{r['id']}"):
                     cursor.execute("UPDATE projetos SET status_entrada=?, status_final=?, status_integral=? WHERE id=?", (s_ent, s_fin, s_int, r['id'])); conn.commit(); st.rerun()
-                
                 if c_orc.button("Orçamento", key=f"btn_orc{r['id']}"):
                     pdf_o = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'])
                     if pdf_o: st.download_button("Baixar Orçamento", pdf_o, f"Orcamento_{r['cliente']}.pdf", key=f"dl_orc{r['id']}")
-
                 if c_rec.button("Recibo", key=f"btn_rec{r['id']}"):
                     v_pago = r['valor'] if s_int == "Recebido" else (r['valor_entrada'] if s_ent == "Recebido" else 0)
                     pdf_r = gerar_pdf_recibo(r['cliente'], r['servico'], v_pago)
                     if pdf_r: st.download_button("Baixar Recibo", pdf_r, f"Recibo_{r['cliente']}.pdf", key=f"dl_rec{r['id']}")
-
                 if c_del.button("Excluir", key=f"del{r['id']}"):
                     cursor.execute("DELETE FROM projetos WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
 
     elif escolha == "Configurações":
         st.title("⚙️ Configurações da Empresa")
-        info_f = buscar_dados_empresa()
+        info_form = buscar_dados_empresa()
         with st.form("form_config"):
-            nome_emp = st.text_input("Nome do Studio/Empresa", info_f[0])
-            slogan_emp = st.text_input("Slogan ou Subtítulo", info_f[1])
-            whats_emp = st.text_input("WhatsApp", info_f[2])
-            email_emp = st.text_input("E-mail", info_f[3])
-            end_emp = st.text_area("Endereço", info_f[4])
-            if st.form_submit_button("SALVAR CONFIGURAÇÕES"):
-                # FORÇANDO O UPDATE APENAS NO ID 1
+            nome_emp = st.text_input("Nome do Studio/Empresa", info_form[0])
+            slogan_emp = st.text_input("Slogan ou Subtítulo", info_form[1])
+            whats_emp = st.text_input("WhatsApp de Contato", info_form[2])
+            email_emp = st.text_input("E-mail", info_form[3])
+            end_emp = st.text_area("Endereço Completo", info_form[4])
+            if st.form_submit_button("SALVAR"):
                 cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? WHERE id=1", (nome_emp, slogan_emp, whats_emp, email_emp, end_emp))
-                conn.commit(); st.success("✅ Configurações atualizadas!"); st.rerun()
+                conn.commit(); st.success("Configurações Salvas!"); st.rerun()
     conn.close()
 
 if __name__ == "__main__":
