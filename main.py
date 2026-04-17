@@ -17,10 +17,7 @@ def aplicar_estilo():
             background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%);
             color: #000 !important; font-weight: bold; border-radius: 8px; width: 100%; border: none;
         }
-        section[data-testid="stSidebar"] { 
-            background-color: #111111; 
-            border-right: 2px solid #D4AF37; 
-        }
+        section[data-testid="stSidebar"] { background-color: #111111; border-right: 2px solid #D4AF37; }
         .stMetric {
             background-color: #1a1a1a;
             padding: 15px;
@@ -36,22 +33,36 @@ def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs, info):
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 55, 'F')
+        # Ajuste no cabeçalho para não cortar o texto
+        pdf.set_fill_color(20, 20, 20)
+        pdf.rect(0, 0, 210, 65, 'F') # Aumentado de 55 para 65
+        
         nome_st = str(info[0]) if info else "SaarteSvm"
+        slogan_st = str(info[1]) if info else ""
+        
+        pdf.set_y(15) # Margem superior interna
         pdf.set_font("Arial", 'B', 24); pdf.set_text_color(212, 175, 55)
         pdf.cell(0, 15, nome_st, ln=True, align='C')
+        
         pdf.set_font("Arial", 'I', 10); pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 5, str(info[1]), ln=True, align='C')
-        pdf.ln(20); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 5, slogan_st, ln=True, align='C')
+        
+        # Corpo do documento
+        pdf.set_y(75) # Começa o texto abaixo do fundo preto
+        pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 12)
         pdf.cell(100, 10, f"CLIENTE: {str(cliente).upper()}", ln=0)
         pdf.cell(0, 10, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
+        
         pdf.ln(10); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "1. DESCRICAO DO SERVICO", ln=True)
         pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{servico}")
+        
         if obs:
             pdf.ln(2); pdf.set_font("Arial", 'B', 11); pdf.cell(10, 7, "Obs: "); pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{obs}")
+            
         pdf.ln(5); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "2. CONDICOES", ln=True)
         pdf.set_font("Arial", '', 11); pdf.cell(0, 8, f"- Prazo: {prazo} | Revisoes: {rev}", ln=True)
         pdf.cell(0, 8, f"- Pagamento: {pgto}", ln=True)
+        
         pdf.set_y(-40); pdf.set_font("Arial", 'B', 18)
         pdf.cell(0, 15, f"INVESTIMENTO TOTAL: R$ {valor:,.2f}", ln=True, align='R')
         return pdf.output(dest='S').encode('latin-1', 'ignore')
@@ -61,13 +72,20 @@ def gerar_pdf_recibo(cliente, servico, valor, info):
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_draw_color(212, 175, 55); pdf.rect(5, 5, 200, 100)
-        pdf.set_font("Arial", 'B', 18); pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
-        pdf.ln(5); pdf.set_font("Arial", '', 12)
+        pdf.set_draw_color(212, 175, 55); pdf.rect(5, 5, 200, 120)
+        pdf.set_font("Arial", 'B', 18); pdf.set_y(15)
+        pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
+        pdf.ln(10); pdf.set_font("Arial", '', 12)
         texto = f"Recebemos de {str(cliente).upper()}, a importancia de R$ {valor:,.2f} referente ao servico de: {servico}."
         pdf.multi_cell(0, 10, texto, align='L')
         pdf.ln(10); pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
-        pdf.ln(10); pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
+        
+        # Endereço no recibo se disponível
+        if info and info[4]:
+            pdf.ln(5); pdf.set_font("Arial", 'I', 9)
+            pdf.cell(0, 5, f"Endereco: {info[4]}", ln=True, align='C')
+            
+        pdf.ln(15); pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
         pdf.set_font("Arial", 'B', 10); pdf.cell(0, 5, str(info[0]) if info else "SaarteSvm", ln=True, align='C')
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
@@ -81,6 +99,7 @@ def iniciar_db():
         data_inicio TEXT, telefone TEXT, valor_entrada REAL, status_entrada TEXT, valor_final REAL, 
         status_final TEXT, status_integral TEXT, prazo_salvo TEXT, pagamento_salvo TEXT, 
         revisao_salva TEXT, obs_salva TEXT)""")
+    # Tabela de configuração com campo de endereço
     cursor.execute("CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY, nome_studio TEXT, sub_titulo TEXT, contato TEXT, email TEXT, endereco TEXT)")
     cursor.execute("SELECT COUNT(*) FROM config")
     if cursor.fetchone()[0] == 0:
@@ -88,7 +107,7 @@ def iniciar_db():
     conn.commit()
     return conn
 
-# 5. Interface
+# 5. Interface Principal
 def main():
     aplicar_estilo()
     conn = iniciar_db()
@@ -107,12 +126,15 @@ def main():
         
         if not df.empty:
             for _, r in df.iterrows():
-                v_total = r['valor'] or 0; v_ent = r['valor_entrada'] or 0
+                v_total = r['valor'] or 0
+                v_ent = r['valor_entrada'] or 0
+                v_fin = r['valor_final'] or 0
+                
                 if r['status_integral'] == 'Recebido':
                     total_rec += v_total
                 else:
                     total_rec += (v_ent if r['status_entrada'] == 'Recebido' else 0)
-                    total_rec += (v_ent if r['status_final'] == 'Recebido' else 0)
+                    total_rec += (v_fin if r['status_final'] == 'Recebido' else 0)
             
             total_v_projetos = df['valor'].sum() or 0
             total_pend = total_v_projetos - total_rec
@@ -165,7 +187,8 @@ def main():
                 pdf_re = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'], config_res)
                 cb.download_button("📄 Orçamento", pdf_re, f"Orcamento_{r['cliente']}.pdf", key=f"pdf{r['id']}")
                 
-                v_rec = r['valor'] if s_int == "Recebido" else r['valor_entrada']
+                # Cálculo do valor do recibo baseado no status
+                v_rec = r['valor'] if s_int == "Recebido" else (r['valor_entrada'] if s_ent == "Recebido" else 0)
                 pdf_rec = gerar_pdf_recibo(r['cliente'], r['servico'], v_rec, config_res)
                 cc.download_button("🧾 Recibo", pdf_rec, f"Recibo_{r['cliente']}.pdf", key=f"rec{r['id']}")
                 
@@ -173,12 +196,15 @@ def main():
                     cursor.execute("DELETE FROM projetos WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
 
     elif escolha == "Configurações":
-        st.title("⚙️ Configurações")
+        st.title("⚙️ Configurações do Studio")
         with st.form("cfg"):
-            n_s = st.text_input("Nome", config_res[0]); sub_s = st.text_input("Slogan", config_res[1])
-            t_s = st.text_input("WhatsApp", config_res[2]); e_s = st.text_input("Email", config_res[3])
-            if st.form_submit_button("Salvar"):
-                cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=? WHERE id=1", (n_s, sub_s, t_s, e_s))
+            n_s = st.text_input("Nome", config_res[0])
+            sub_s = st.text_input("Slogan", config_res[1])
+            t_s = st.text_input("WhatsApp", config_res[2])
+            e_s = st.text_input("Email", config_res[3])
+            end_s = st.text_area("Endereço Completo", config_res[4]) # Novo campo solicitado
+            if st.form_submit_button("Salvar Configurações"):
+                cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? WHERE id=1", (n_s, sub_s, t_s, e_s, end_s))
                 conn.commit(); st.rerun()
     conn.close()
 
