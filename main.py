@@ -7,7 +7,7 @@ from fpdf import FPDF
 # 1. Configuração da Página
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
-# 2. Estilo Visual Premium (Preservado)
+# 2. Estilo Visual Premium
 def aplicar_estilo():
     st.markdown("""
         <style>
@@ -33,29 +33,35 @@ def aplicar_estilo():
         </style>
     """, unsafe_allow_html=True)
 
-# 3. Funções de Busca (Blindadas contra erro de página branca)
+# 3. Busca de Dados (FORÇANDO ATUALIZAÇÃO)
 def buscar_dados_empresa():
-    try:
-        conn = sqlite3.connect('saartesvm_data.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
-        res = cursor.fetchone()
-        conn.close()
-        if res: return res
-    except: pass
-    return ("SaarteSvm", "Studio Criativo", "", "", "")
+    conn = sqlite3.connect('saartesvm_data.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
+    res = cursor.fetchone()
+    conn.close()
+    if res:
+        return res
+    return ("SAARTESVM", "Studio Criativo", "", "", "")
 
-# 4. Funções de PDF (Orçamento e Recibo 100% Funcionais)
+# 4. Funções de PDF (CIRÚRGICAS)
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs):
     try:
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.add_page()
+        # Cabeçalho Escuro
         pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 65, 'F')
+        
+        # NOME DA EMPRESA (Puxando direto da variável info)
         pdf.set_y(15); pdf.set_font("Arial", 'B', 26); pdf.set_text_color(212, 175, 55)
         pdf.cell(0, 15, str(info[0]).upper(), ln=True, align='C')
+        
+        # SLOGAN
         pdf.set_font("Arial", 'I', 12); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 8, str(info[1]), ln=True, align='C')
+        
+        # Corpo do Orçamento
         pdf.set_y(75); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 12)
         pdf.cell(100, 10, f"CLIENTE: {str(cliente).upper()}", ln=0)
         pdf.cell(0, 10, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
@@ -89,7 +95,7 @@ def gerar_pdf_recibo(cliente, servico, valor):
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# 5. Banco de Dados
+# 5. Banco de Dados (Blindado)
 def iniciar_db():
     conn = sqlite3.connect('saartesvm_data.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -99,19 +105,20 @@ def iniciar_db():
         status_final TEXT, status_integral TEXT, prazo_salvo TEXT, pagamento_salvo TEXT, 
         revisao_salva TEXT, obs_salva TEXT)""")
     cursor.execute("CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY, nome_studio TEXT, sub_titulo TEXT, contato TEXT, email TEXT, endereco TEXT)")
-    cursor.execute("SELECT COUNT(*) FROM config")
+    
+    # Garantir que o ID 1 existe
+    cursor.execute("SELECT COUNT(*) FROM config WHERE id=1")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO config (id, nome_studio, sub_titulo, contato, email, endereco) VALUES (1, 'SaarteSvm', 'Studio Criativo', '', '', '')")
+        cursor.execute("INSERT INTO config (id, nome_studio, sub_titulo, contato, email, endereco) VALUES (1, 'SAARTESVM', 'Studio Criativo', '', '', '')")
         conn.commit()
     return conn
 
-# 6. Interface Principal
+# 6. Interface
 def main():
     aplicar_estilo()
     conn = iniciar_db()
     cursor = conn.cursor()
     info_sidebar = buscar_dados_empresa()
-    
     st.sidebar.title(f"⚜️ {info_sidebar[0]}")
     menu = ["Painel", "Novo Job", "Gestão de Projetos", "Configurações"]
     escolha = st.sidebar.radio("Navegar:", menu)
@@ -180,16 +187,17 @@ def main():
 
     elif escolha == "Configurações":
         st.title("⚙️ Configurações da Empresa")
-        info_form = buscar_dados_empresa()
+        info_f = buscar_dados_empresa()
         with st.form("form_config"):
-            nome_emp = st.text_input("Nome do Studio/Empresa", info_form[0])
-            slogan_emp = st.text_input("Slogan ou Subtítulo", info_form[1])
-            whats_emp = st.text_input("WhatsApp de Contato", info_form[2])
-            email_emp = st.text_input("E-mail", info_form[3])
-            end_emp = st.text_area("Endereço Completo", info_form[4])
-            if st.form_submit_button("SALVAR"):
+            nome_emp = st.text_input("Nome do Studio/Empresa", info_f[0])
+            slogan_emp = st.text_input("Slogan ou Subtítulo", info_f[1])
+            whats_emp = st.text_input("WhatsApp", info_f[2])
+            email_emp = st.text_input("E-mail", info_f[3])
+            end_emp = st.text_area("Endereço", info_f[4])
+            if st.form_submit_button("SALVAR CONFIGURAÇÕES"):
+                # FORÇANDO O UPDATE APENAS NO ID 1
                 cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? WHERE id=1", (nome_emp, slogan_emp, whats_emp, email_emp, end_emp))
-                conn.commit(); st.success("Salvo!"); st.rerun()
+                conn.commit(); st.success("✅ Configurações atualizadas!"); st.rerun()
     conn.close()
 
 if __name__ == "__main__":
