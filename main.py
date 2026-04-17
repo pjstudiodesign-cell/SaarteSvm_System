@@ -93,20 +93,4 @@ def gerar_pdf_recibo(cliente, servico, valor, info):
     pdf.set_font("Arial", 'B', 18); pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
     pdf.ln(5); pdf.set_font("Arial", '', 12)
     texto = f"Recebemos de {str(cliente).upper()}, a importancia de R$ {valor:,.2f} referente ao servico de: {servico}."
-    pdf.multi_cell(0, 10, texto, align='L')
-    pdf.ln(10); pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
-    pdf.ln(10); pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
-    pdf.set_font("Arial", 'B', 10); pdf.cell(0, 5, str(info[0]) if info else "SaarteSvm", ln=True, align='C')
-    return pdf.output(dest='S').encode('latin-1', 'ignore')
-
-# ==========================================
-# LOGICA PRINCIPAL
-# ==========================================
-def main():
-    aplicar_estilo_saartesvm()
-    # Banco de dados específico para o cliente
-    conn = sqlite3.connect('saartesvm_data.db', check_same_thread=False); cursor = conn.cursor()
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS projetos 
-                      (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente TEXT, servico TEXT, valor REAL, status TEXT, 
-                       data_inicio TEXT,
+    pdf
