@@ -7,48 +7,55 @@ from fpdf import FPDF
 # 1. Configuração da Página
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
-# 2. Estilo Visual Premium (Correção de Contraste nos Botões de Download)
+# 2. Estilo Visual Premium (Correção Total de Visibilidade)
 def aplicar_estilo():
     st.markdown("""
         <style>
+        /* Fundo Geral */
         .stApp { background-color: #0d0d0d; }
         
-        /* Títulos e textos gerais em Dourado */
-        h1, h2, h3, label { color: #D4AF37 !important; }
+        /* Títulos principais em Dourado */
+        h1, h2, h3 { color: #D4AF37 !important; }
         
-        /* TODOS OS BOTÕES (Normais e de Download) */
+        /* TEXTOS DO MENU LATERAL (Sidebar) */
+        [data-testid="stSidebarNav"] span, 
+        [data-testid="stSidebar"] .st-emotion-cache-17l686g,
+        [data-testid="stSidebar"] p {
+            color: #ffffff !important;
+            font-weight: bold !important;
+            font-size: 1.1em !important;
+        }
+        
+        /* TEXTOS DENTRO DA GESTÃO (Expanders e Labels) */
+        .st-emotion-cache-10trblm, .st-emotion-cache-eqp5v6 p, .st-emotion-cache-6q9sum {
+            color: #ffffff !important;
+        }
+        
+        /* Labels de formulários em Dourado para destaque */
+        label { color: #D4AF37 !important; font-weight: bold !important; }
+
+        /* TODOS OS BOTÕES: Fundo Dourado e Texto PRETO */
         .stButton>button, .stDownloadButton>button {
             background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
-            color: #000000 !important; /* TEXTO PRETO PARA MÁXIMA LEITURA */
+            color: #000000 !important;
             font-weight: bold !important;
             border-radius: 8px !important;
             width: 100% !important;
             border: none !important;
             height: 3em !important;
             box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
         
-        /* Ajuste específico para garantir que o ícone e o texto do download fiquem pretos */
-        .stDownloadButton>button p {
-            color: #000000 !important;
-        }
-        
-        /* Hover: Leve brilho ao passar o mouse */
-        .stButton>button:hover, .stDownloadButton>button:hover {
-            border: 1px solid #ffffff !important;
-            filter: brightness(1.1);
-        }
+        /* Texto interno dos botões de download */
+        .stDownloadButton>button p { color: #000000 !important; }
 
-        /* Sidebar */
+        /* Estilização da Sidebar */
         section[data-testid="stSidebar"] { 
             background-color: #111111; 
             border-right: 2px solid #D4AF37; 
         }
         
-        /* Cards do Painel */
+        /* CARDS DO PAINEL */
         .stMetric {
             background-color: #1a1a1a;
             padding: 20px;
@@ -57,7 +64,7 @@ def aplicar_estilo():
             text-align: center;
         }
         .metric-label {
-            color: #ffffff !important; /* TEXTO SUPERIOR EM BRANCO */
+            color: #ffffff !important; 
             font-size: 1.1em;
             font-weight: bold;
             margin-bottom: 10px;
@@ -68,10 +75,13 @@ def aplicar_estilo():
             font-size: 2.2em;
             font-weight: bold;
         }
+        
+        /* Ajuste para textos dentro de colunas e expanders na Gestão */
+        .stMarkdown p { color: #ffffff !important; }
         </style>
     """, unsafe_allow_html=True)
 
-# 3. Funções de Geração de Documentos (PDF)
+# 3. Funções de Geração de PDF
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs, info):
     try:
         pdf = FPDF()
@@ -132,7 +142,7 @@ def iniciar_db():
     conn.commit()
     return conn
 
-# 5. Interface Principal
+# 5. Interface
 def main():
     aplicar_estilo()
     conn = iniciar_db()
@@ -189,23 +199,22 @@ def main():
         df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn)
         for _, r in df.iterrows():
             with st.expander(f"📌 {r['cliente']} | R$ {r['valor']:.2f}"):
+                # Texto do serviço em branco para contraste
+                st.markdown(f"**Serviço:** {r['servico']}")
+                
                 col1, col2, col3 = st.columns(3)
                 s_int = col1.selectbox("Integral", ["Pendente", "Recebido"], index=0 if r['status_integral'] == "Pendente" else 1, key=f"i{r['id']}")
                 s_ent = col2.selectbox("Entrada (50%)", ["Pendente", "Recebido"], index=0 if r['status_entrada'] == "Pendente" else 1, key=f"e{r['id']}")
                 s_fin = col3.selectbox("Final (50%)", ["Pendente", "Recebido"], index=0 if r['status_final'] == "Pendente" else 1, key=f"f{r['id']}")
                 
-                # BOTOES DE AÇÃO
                 c_at, c_orc, c_rec, c_del = st.columns(4)
-                
                 if c_at.button("Atualizar", key=f"s{r['id']}"):
                     cursor.execute("UPDATE projetos SET status_entrada=?, status_final=?, status_integral=? WHERE id=?", (s_ent, s_fin, s_int, r['id'])); conn.commit(); st.rerun()
                 
-                # Geração de arquivos para os botões de download
                 pdf_re = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'], config_res)
                 v_rec = r['valor'] if s_int == "Recebido" else (r['valor_entrada'] if s_ent == "Recebido" else 0)
                 pdf_rec = gerar_pdf_recibo(r['cliente'], r['servico'], v_rec, config_res)
                 
-                # BOTÕES DE DOWNLOAD CORRIGIDOS
                 c_orc.download_button("📄 Orçamento", pdf_re, f"Orcamento_{r['cliente']}.pdf", key=f"pdf{r['id']}")
                 c_rec.download_button("🧾 Recibo", pdf_rec, f"Recibo_{r['cliente']}.pdf", key=f"rec{r['id']}")
                 
@@ -216,7 +225,7 @@ def main():
         st.title("⚙️ Configurações")
         with st.form("cfg"):
             n_s = st.text_input("Nome", config_res[0]); sub_s = st.text_input("Slogan", config_res[1]); t_s = st.text_input("WhatsApp", config_res[2]); e_s = st.text_input("Email", config_res[3]); end_s = st.text_area("Endereço", config_res[4])
-            if st.form_submit_button("Salvar"):
+            if st.form_submit_button("Salvar Configurações"):
                 cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? WHERE id=1", (n_s, sub_s, t_s, e_s, end_s)); conn.commit(); st.rerun()
     conn.close()
 
