@@ -7,30 +7,16 @@ from fpdf import FPDF
 # 1. Configuração da Página
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
-# 2. Estilo Visual Premium (Correção de Contraste Total)
+# 2. Estilo Visual Premium
 def aplicar_estilo():
     st.markdown("""
         <style>
         .stApp { background-color: #0d0d0d; }
-        
-        /* Títulos principais em Dourado */
         h1, h2, h3 { color: #D4AF37 !important; }
-        
-        /* MENU LATERAL: Texto em Branco e Negrito */
-        [data-testid="stSidebarNav"] span {
-            color: #ffffff !important;
-            font-weight: bold !important;
-        }
-        
-        /* CABEÇALHOS DA GESTÃO (EXPANDERS): Texto em Branco para leitura */
-        .st-emotion-cache-p5msec, .st-emotion-cache-1h9usn2, p {
-            color: #ffffff !important;
-        }
-        
-        /* Labels de formulários em Dourado */
+        [data-testid="stSidebarNav"] span { color: #ffffff !important; font-weight: bold !important; }
+        .st-emotion-cache-p5msec, .st-emotion-cache-1h9usn2, p { color: #ffffff !important; }
         label { color: #D4AF37 !important; font-weight: bold !important; }
 
-        /* BOTÕES: Fundo Dourado e Texto PRETO (Perfeitos como você pediu) */
         .stButton>button, .stDownloadButton>button {
             background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
             color: #000000 !important;
@@ -40,28 +26,15 @@ def aplicar_estilo():
             border: none !important;
             height: 3em !important;
         }
-        
         .stDownloadButton>button p { color: #000000 !important; }
-
-        /* Sidebar */
-        section[data-testid="stSidebar"] { 
-            background-color: #111111; 
-            border-right: 2px solid #D4AF37; 
-        }
-        
-        /* PAINEL: Correção dos textos de valores */
-        .stMetric {
-            background-color: #1a1a1a;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #333;
-        }
+        section[data-testid="stSidebar"] { background-color: #111111; border-right: 2px solid #D4AF37; }
+        .stMetric { background-color: #1a1a1a; padding: 20px; border-radius: 12px; border: 1px solid #333; }
         [data-testid="stMetricLabel"] { color: #ffffff !important; font-size: 1.2em !important; }
         [data-testid="stMetricValue"] { color: #D4AF37 !important; }
         </style>
     """, unsafe_allow_html=True)
 
-# 3. Funções de Geração de PDF (Orçamento e Recibo)
+# 3. Funções de PDF
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs, info):
     try:
         pdf = FPDF()
@@ -118,8 +91,8 @@ def iniciar_db():
     cursor.execute("CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY, nome_studio TEXT, sub_titulo TEXT, contato TEXT, email TEXT, endereco TEXT)")
     cursor.execute("SELECT COUNT(*) FROM config")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO config VALUES (1, 'SaarteSvm', 'Studio Criativo', '', '', '')")
-    conn.commit()
+        cursor.execute("INSERT INTO config (id, nome_studio, sub_titulo, contato, email, endereco) VALUES (1, 'SaarteSvm', 'Studio Criativo', '', '', '')")
+        conn.commit()
     return conn
 
 # 5. Interface
@@ -127,6 +100,8 @@ def main():
     aplicar_estilo()
     conn = iniciar_db()
     cursor = conn.cursor()
+    
+    # Busca configurações
     cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
     config_res = cursor.fetchone()
     
@@ -138,7 +113,6 @@ def main():
         st.title(f"⚜️ Painel {config_res[0]}")
         df = pd.read_sql_query("SELECT * FROM projetos", conn)
         total_rec = 0.0; total_pend = 0.0
-        
         if not df.empty:
             for _, r in df.iterrows():
                 v_total = r['valor'] or 0; v_ent = r['valor_entrada'] or 0; v_fin = r['valor_final'] or 0
@@ -147,12 +121,9 @@ def main():
                     total_rec += (v_ent if r['status_entrada'] == 'Recebido' else 0)
                     total_rec += (v_fin if r['status_final'] == 'Recebido' else 0)
             total_pend = (df['valor'].sum() or 0) - total_rec
-        
         col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total em Caixa", f"R$ {total_rec:,.2f}")
-        with col2:
-            st.metric("A Receber", f"R$ {total_pend:,.2f}")
+        with col1: st.metric("Total em Caixa", f"R$ {total_rec:,.2f}")
+        with col2: st.metric("A Receber", f"R$ {total_pend:,.2f}")
 
     elif escolha == "Novo Job":
         st.title("⚜️ Novo Orçamento")
@@ -176,33 +147,48 @@ def main():
         st.title("⚜️ Gestão e Financeiro")
         df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn)
         for _, r in df.iterrows():
-            # AQUI ESTÁ O TEXTO QUE FICARÁ BRANCO E VISÍVEL
             with st.expander(f"📌 {r['cliente']} | R$ {r['valor']:.2f}"):
                 st.write(f"**Serviço:** {r['servico']}")
                 col1, col2, col3 = st.columns(3)
                 s_int = col1.selectbox("Integral", ["Pendente", "Recebido"], index=0 if r['status_integral'] == "Pendente" else 1, key=f"i{r['id']}")
                 s_ent = col2.selectbox("Entrada", ["Pendente", "Recebido"], index=0 if r['status_entrada'] == "Pendente" else 1, key=f"e{r['id']}")
                 s_fin = col3.selectbox("Final", ["Pendente", "Recebido"], index=0 if r['status_final'] == "Pendente" else 1, key=f"f{r['id']}")
-                
                 c_at, c_orc, c_rec, c_del = st.columns(4)
                 if c_at.button("Atualizar", key=f"s{r['id']}"):
                     cursor.execute("UPDATE projetos SET status_entrada=?, status_final=?, status_integral=? WHERE id=?", (s_ent, s_fin, s_int, r['id'])); conn.commit(); st.rerun()
-                
                 pdf_re = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'], config_res)
                 v_rec = r['valor'] if s_int == "Recebido" else (r['valor_entrada'] if s_ent == "Recebido" else 0)
                 pdf_rec = gerar_pdf_recibo(r['cliente'], r['servico'], v_rec, config_res)
-                
                 c_orc.download_button("Orçamento", pdf_re, f"Orcamento_{r['cliente']}.pdf", key=f"pdf{r['id']}")
                 c_rec.download_button("Recibo", pdf_rec, f"Recibo_{r['cliente']}.pdf", key=f"rec{r['id']}")
                 if c_del.button("Excluir", key=f"del{r['id']}"):
                     cursor.execute("DELETE FROM projetos WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
 
     elif escolha == "Configurações":
-        st.title("⚙️ Configurações")
-        with st.form("cfg"):
-            n_s = st.text_input("Nome", config_res[0]); sub_s = st.text_input("Slogan", config_res[1]); t_s = st.text_input("WhatsApp", config_res[2]); e_s = st.text_input("Email", config_res[3]); end_s = st.text_area("Endereço", config_res[4])
-            if st.form_submit_button("Salvar"):
-                cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? WHERE id=1", (n_s, sub_s, t_s, e_s, end_s)); conn.commit(); st.rerun()
+        st.title("⚙️ Configurações da Empresa")
+        # Criamos o formulário
+        with st.form("form_config"):
+            nome_emp = st.text_input("Nome do Studio/Empresa", config_res[0])
+            slogan_emp = st.text_input("Slogan ou Subtítulo", config_res[1])
+            whats_emp = st.text_input("WhatsApp de Contato", config_res[2])
+            email_emp = st.text_input("E-mail", config_res[3])
+            end_emp = st.text_area("Endereço Completo", config_res[4])
+            
+            # Botão de submissão do formulário
+            salvar_cfg = st.form_submit_button("SALVAR CONFIGURAÇÕES")
+            
+            if salvar_cfg:
+                try:
+                    cursor.execute("""UPDATE config SET 
+                        nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? 
+                        WHERE id=1""", (nome_emp, slogan_emp, whats_emp, email_emp, end_emp))
+                    conn.commit()
+                    st.success("✅ Configurações salvas com sucesso!")
+                    # Pequeno delay antes de recarregar para mostrar o sucesso
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
+                    
     conn.close()
 
 if __name__ == "__main__":
