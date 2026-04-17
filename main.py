@@ -34,48 +34,66 @@ def aplicar_estilo():
         </style>
     """, unsafe_allow_html=True)
 
-# 3. Funções de PDF
+# 3. Funções de PDF (Ajustadas para garantir os dados da empresa)
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs, info):
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 65, 'F')
-        nome_st = str(info[0]) if info else "SaarteSvm"
-        slogan_st = str(info[1]) if info else ""
+        
+        # Garante que os dados da empresa apareçam no topo
+        nome_st = str(info[0]) if info and info[0] else "SaarteSvm"
+        slogan_st = str(info[1]) if info and info[1] else "Studio Criativo"
+        
         pdf.set_y(15)
         pdf.set_font("Arial", 'B', 24); pdf.set_text_color(212, 175, 55)
         pdf.cell(0, 15, nome_st, ln=True, align='C')
         pdf.set_font("Arial", 'I', 10); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 5, slogan_st, ln=True, align='C')
+        
         pdf.set_y(75); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 12)
         pdf.cell(100, 10, f"CLIENTE: {str(cliente).upper()}", ln=0)
         pdf.cell(0, 10, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
+        
         pdf.ln(10); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "1. DESCRICAO DO SERVICO", ln=True)
         pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{servico}")
+        
         if obs:
             pdf.ln(2); pdf.set_font("Arial", 'B', 11); pdf.cell(10, 7, "Obs: "); pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{obs}")
+            
         pdf.ln(5); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "2. CONDICOES", ln=True)
         pdf.set_font("Arial", '', 11); pdf.cell(0, 8, f"- Prazo: {prazo} | Revisoes: {rev}", ln=True)
         pdf.cell(0, 8, f"- Pagamento: {pgto}", ln=True)
+        
         pdf.set_y(-40); pdf.set_font("Arial", 'B', 18)
         pdf.cell(0, 15, f"INVESTIMENTO TOTAL: R$ {valor:,.2f}", ln=True, align='R')
+        
         return pdf.output(dest='S').encode('latin-1', 'ignore')
-    except: return None
+    except Exception as e:
+        print(f"Erro PDF: {e}")
+        return None
 
 def gerar_pdf_recibo(cliente, servico, valor, info):
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_draw_color(212, 175, 55); pdf.rect(5, 5, 200, 120)
+        
         pdf.set_font("Arial", 'B', 18); pdf.set_y(15); pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
         pdf.ln(10); pdf.set_font("Arial", '', 12)
+        
         texto = f"Recebemos de {str(cliente).upper()}, a importancia de R$ {valor:,.2f} referente ao servico de: {servico}."
         pdf.multi_cell(0, 10, texto, align='L')
+        
         pdf.ln(10); pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
+        
+        # Endereço da empresa no recibo
         if info and info[4]:
             pdf.ln(5); pdf.set_font("Arial", 'I', 9); pdf.cell(0, 5, f"Endereco: {info[4]}", ln=True, align='C')
+            
         pdf.ln(15); pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
         pdf.set_font("Arial", 'B', 10); pdf.cell(0, 5, str(info[0]) if info else "SaarteSvm", ln=True, align='C')
+        
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
@@ -95,22 +113,22 @@ def iniciar_db():
         conn.commit()
     return conn
 
-# 5. Interface
+# 5. Interface Principal
 def main():
     aplicar_estilo()
     conn = iniciar_db()
     cursor = conn.cursor()
     
-    # Busca configurações
+    # SEMPRE buscar as configurações mais recentes para a interface e PDFs
     cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
-    config_res = cursor.fetchone()
+    config_atualizada = cursor.fetchone()
     
-    st.sidebar.title(f"⚜️ {config_res[0]}")
+    st.sidebar.title(f"⚜️ {config_atualizada[0]}")
     menu = ["Painel", "Novo Job", "Gestão de Projetos", "Configurações"]
     escolha = st.sidebar.radio("Navegar:", menu)
 
     if escolha == "Painel":
-        st.title(f"⚜️ Painel {config_res[0]}")
+        st.title(f"⚜️ Painel {config_atualizada[0]}")
         df = pd.read_sql_query("SELECT * FROM projetos", conn)
         total_rec = 0.0; total_pend = 0.0
         if not df.empty:
@@ -154,37 +172,38 @@ def main():
                 s_ent = col2.selectbox("Entrada", ["Pendente", "Recebido"], index=0 if r['status_entrada'] == "Pendente" else 1, key=f"e{r['id']}")
                 s_fin = col3.selectbox("Final", ["Pendente", "Recebido"], index=0 if r['status_final'] == "Pendente" else 1, key=f"f{r['id']}")
                 c_at, c_orc, c_rec, c_del = st.columns(4)
+                
                 if c_at.button("Atualizar", key=f"s{r['id']}"):
                     cursor.execute("UPDATE projetos SET status_entrada=?, status_final=?, status_integral=? WHERE id=?", (s_ent, s_fin, s_int, r['id'])); conn.commit(); st.rerun()
-                pdf_re = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'], config_res)
+                
+                # PDFs com a variável config_atualizada que buscamos no início do main()
+                pdf_re = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'], config_atualizada)
                 v_rec = r['valor'] if s_int == "Recebido" else (r['valor_entrada'] if s_ent == "Recebido" else 0)
-                pdf_rec = gerar_pdf_recibo(r['cliente'], r['servico'], v_rec, config_res)
-                c_orc.download_button("Orçamento", pdf_re, f"Orcamento_{r['cliente']}.pdf", key=f"pdf{r['id']}")
-                c_rec.download_button("Recibo", pdf_rec, f"Recibo_{r['cliente']}.pdf", key=f"rec{r['id']}")
+                pdf_rec = gerar_pdf_recibo(r['cliente'], r['servico'], v_rec, config_atualizada)
+                
+                if pdf_re:
+                    c_orc.download_button("Orçamento", pdf_re, f"Orcamento_{r['cliente']}.pdf", key=f"pdf{r['id']}")
+                if pdf_rec:
+                    c_rec.download_button("Recibo", pdf_rec, f"Recibo_{r['cliente']}.pdf", key=f"rec{r['id']}")
                 if c_del.button("Excluir", key=f"del{r['id']}"):
                     cursor.execute("DELETE FROM projetos WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
 
     elif escolha == "Configurações":
         st.title("⚙️ Configurações da Empresa")
-        # Criamos o formulário
         with st.form("form_config"):
-            nome_emp = st.text_input("Nome do Studio/Empresa", config_res[0])
-            slogan_emp = st.text_input("Slogan ou Subtítulo", config_res[1])
-            whats_emp = st.text_input("WhatsApp de Contato", config_res[2])
-            email_emp = st.text_input("E-mail", config_res[3])
-            end_emp = st.text_area("Endereço Completo", config_res[4])
+            nome_emp = st.text_input("Nome do Studio/Empresa", config_atualizada[0])
+            slogan_emp = st.text_input("Slogan ou Subtítulo", config_atualizada[1])
+            whats_emp = st.text_input("WhatsApp de Contato", config_atualizada[2])
+            email_emp = st.text_input("E-mail", config_atualizada[3])
+            end_emp = st.text_area("Endereço Completo", config_atualizada[4])
             
-            # Botão de submissão do formulário
-            salvar_cfg = st.form_submit_button("SALVAR CONFIGURAÇÕES")
-            
-            if salvar_cfg:
+            if st.form_submit_button("SALVAR CONFIGURAÇÕES"):
                 try:
                     cursor.execute("""UPDATE config SET 
                         nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? 
                         WHERE id=1""", (nome_emp, slogan_emp, whats_emp, email_emp, end_emp))
                     conn.commit()
-                    st.success("✅ Configurações salvas com sucesso!")
-                    # Pequeno delay antes de recarregar para mostrar o sucesso
+                    st.success("✅ Configurações salvas! Gere o PDF novamente para ver as mudanças.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
