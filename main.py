@@ -45,37 +45,37 @@ def buscar_dados_empresa():
     except: pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# 4. Geração de PDF com Dados Completos
+# 4. Geração de PDF com Ajuste de Tamanho no Nome
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs):
     try:
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.add_page()
         
-        # Cabeçalho Escuro (Mantido conforme as imagens)
+        # Cabeçalho Escuro
         pdf.set_fill_color(20, 20, 20)
         pdf.rect(0, 0, 210, 65, 'F')
         
-        # Nome da Empresa (Destaque Dourado)
-        pdf.set_y(10)
-        pdf.set_font("Arial", 'B', 26)
+        # Nome da Empresa (Ajustado para SaarteSvm e tamanho menor)
+        pdf.set_y(12)
+        pdf.set_font("Arial", 'B', 20) # Reduzido de 26 para 20
         pdf.set_text_color(212, 175, 55)
-        pdf.cell(0, 15, str(info[0]).upper(), ln=True, align='C')
+        pdf.cell(0, 12, "SaarteSvm", ln=True, align='C') # Nome fixo conforme solicitado
         
         # Slogan / Subtítulo
-        pdf.set_font("Arial", 'I', 11)
+        pdf.set_font("Arial", 'I', 10)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 6, str(info[1]), ln=True, align='C')
         
-        # --- NOVIDADE: Dados de Contato e Endereço no Cabeçalho ---
+        # Dados de Contato e Endereço (Aparecendo no Orçamento)
         pdf.set_font("Arial", '', 9)
         pdf.set_text_color(200, 200, 200)
         contato_info = f"WhatsApp: {info[2]} | Email: {info[3]}"
         pdf.cell(0, 6, contato_info, ln=True, align='C')
-        if info[4]: # Se tiver endereço cadastrado
+        if info[4]: 
             pdf.multi_cell(0, 5, f"Endereço: {info[4]}", align='C')
         
-        # Corpo do Orçamento (Preservado)
+        # Corpo do Orçamento
         pdf.set_y(75)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 12)
@@ -128,7 +128,7 @@ def gerar_pdf_recibo(cliente, servico, valor):
         pdf.ln(15)
         pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
         pdf.set_font("Arial", 'B', 10)
-        pdf.cell(0, 5, str(info[0]), ln=True, align='C')
+        pdf.cell(0, 5, "SaarteSvm", ln=True, align='C')
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
@@ -148,7 +148,7 @@ def iniciar_db():
         conn.commit()
     return conn
 
-# 6. Interface Principal
+# 6. Interface Principal (Streamlit)
 def main():
     aplicar_estilo()
     conn = iniciar_db()
