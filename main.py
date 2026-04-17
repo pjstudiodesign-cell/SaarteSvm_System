@@ -129,4 +129,58 @@ def main():
             v = st.number_input("Valor Total", min_value=0.0, step=0.01)
             ser = st.text_area("Serviço")
             obs_in = st.text_input("Observações")
-            c3
+            c3, c4, c5 = st.columns(3)
+            prz = c3.text_input("Prazo", "10 dias úteis")
+            rev = c4.selectbox("Revisões", ["Padrão", "1", "2", "3", "Ilimitadas"])
+            pag = c5.text_input("Pagamento", "50% entrada / 50% entrega")
+            if st.form_submit_button("SALVAR E GERAR PDF"):
+                if n and ser:
+                    cursor.execute("""INSERT INTO projetos (cliente, servico, valor, status, data_inicio, telefone, 
+                        valor_entrada, status_entrada, valor_final, status_final, status_integral, 
+                        prazo_salvo, pagamento_salvo, revisao_salva, obs_salva) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (n, ser, v, "Em Produção", datetime.now().strftime("%d/%m/%Y"), tel, v/2, "Pendente", v/2, "Pendente", "Pendente", prz, pag, rev, obs_in))
+                    conn.commit(); st.success("Orçamento Salvo!")
+                    st.session_state.pdf_data = gerar_pdf_orcamento(n, ser, v, pag, prz, rev, obs_in, config_res)
+                    st.session_state.pdf_name = n
+                else: st.error("Preencha Cliente e Serviço.")
+        if 'pdf_data' in st.session_state:
+            st.download_button("📥 BAIXAR PDF", st.session_state.pdf_data, f"Orcamento_{st.session_state.pdf_name}.pdf", "application/pdf")
+
+    elif escolha == "Gestão de Projetos":
+        st.title("⚜️ Gestão e Financeiro")
+        df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn)
+        for _, r in df.iterrows():
+            with st.expander(f"📌 {r['cliente']} | R$ {r['valor']:.2f}"):
+                st.write(f"**Serviço:** {r['servico']}")
+                col1, col2, col3 = st.columns(3)
+                s_int = col1.selectbox("Integral", ["Pendente", "Recebido"], index=0 if r['status_integral'] == "Pendente" else 1, key=f"i{r['id']}")
+                s_ent = col2.selectbox("Entrada (50%)", ["Pendente", "Recebido"], index=0 if r['status_entrada'] == "Pendente" else 1, key=f"e{r['id']}")
+                s_fin = col3.selectbox("Final (50%)", ["Pendente", "Recebido"], index=0 if r['status_final'] == "Pendente" else 1, key=f"f{r['id']}")
+                
+                ca, cb, cc, cd = st.columns(4)
+                if ca.button("Atualizar Status", key=f"s{r['id']}"):
+                    cursor.execute("UPDATE projetos SET status_entrada=?, status_final=?, status_integral=? WHERE id=?", (s_ent, s_fin, s_int, r['id']))
+                    conn.commit(); st.rerun()
+                
+                pdf_re = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'], config_res)
+                cb.download_button("📄 Orçamento", pdf_re, f"Orcamento_{r['cliente']}.pdf", key=f"pdf{r['id']}")
+                
+                v_rec = r['valor'] if s_int == "Recebido" else r['valor_entrada']
+                pdf_rec = gerar_pdf_recibo(r['cliente'], r['servico'], v_rec, config_res)
+                cc.download_button("🧾 Recibo", pdf_rec, f"Recibo_{r['cliente']}.pdf", key=f"rec{r['id']}")
+                
+                if cd.button("Excluir", key=f"del{r['id']}"):
+                    cursor.execute("DELETE FROM projetos WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
+
+    elif escolha == "Configurações":
+        st.title("⚙️ Configurações")
+        with st.form("cfg"):
+            n_s = st.text_input("Nome", config_res[0]); sub_s = st.text_input("Slogan", config_res[1])
+            t_s = st.text_input("WhatsApp", config_res[2]); e_s = st.text_input("Email", config_res[3])
+            if st.form_submit_button("Salvar"):
+                cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=? WHERE id=1", (n_s, sub_s, t_s, e_s))
+                conn.commit(); st.rerun()
+    conn.close()
+
+if __name__ == "__main__":
+    main()
