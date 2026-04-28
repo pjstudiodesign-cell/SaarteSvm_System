@@ -45,35 +45,60 @@ def buscar_dados_empresa():
     except: pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# --- 3. MOTOR DE PDF (FOLHA ÚNICA LACRADA) ---
-def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
+# --- 3. MOTOR DE PDF PROFISSIONAL (DETALHISTA E LACRADO) ---
+def gerar_documento_pdf(tipo, cliente_nome, servico, valor, doc_id="", prazo="", tel="", doc="", end=""):
     try:
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.set_auto_page_break(auto=False)
         pdf.add_page()
-        pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 65, 'F')
-        pdf.set_y(12); pdf.set_font("Arial", 'B', 20); pdf.set_text_color(212, 175, 55)
-        pdf.cell(0, 12, info[0], ln=True, align='C')
+        
+        # Cabeçalho Premium
+        pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 55, 'F')
+        pdf.set_y(10); pdf.set_font("Arial", 'B', 22); pdf.set_text_color(212, 175, 55)
+        pdf.cell(0, 12, info[0].upper(), ln=True, align='C')
         pdf.set_font("Arial", 'I', 10); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 6, str(info[1]), ln=True, align='C')
-        pdf.set_y(75); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 14)
+        
+        # Título do Documento
+        pdf.set_y(65); pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 14)
         pdf.cell(0, 10, f"{tipo.upper()}", ln=True, align='C')
-        pdf.ln(5); pdf.set_font("Arial", 'B', 11)
-        pdf.cell(100, 10, f"CLIENTE: {str(cliente).upper()}", ln=0)
-        pdf.cell(0, 10, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
-        pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "DESCRICAO DO SERVICO", ln=True)
-        pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{servico}")
+        pdf.ln(2)
+
+        # Informações do Cliente
+        pdf.set_font("Arial", 'B', 10); pdf.cell(0, 8, "DADOS DO CLIENTE", ln=True); pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.set_font("Arial", '', 10)
+        pdf.cell(100, 7, f"CLIENTE: {str(cliente_nome).upper()}", ln=0)
+        pdf.cell(0, 7, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
+        pdf.cell(100, 7, f"CPF/CNPJ: {doc}", ln=0)
+        pdf.cell(0, 7, f"WHATSAPP: {tel}", ln=1, align='R')
+        pdf.multi_cell(0, 7, f"ENDERECO: {end}")
+        pdf.ln(3)
+
+        # Especificações
+        pdf.set_font("Arial", 'B', 10); pdf.cell(0, 8, "DESCRICAO DOS SERVICOS", ln=True); pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.set_font("Arial", '', 10); pdf.ln(2)
+        pdf.multi_cell(0, 6, f"{servico}")
         if prazo:
-            pdf.ln(2); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 10, f"PRAZO DE EXECUCAO: {prazo}", ln=True)
-        pdf.ln(10); pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 15, f"VALOR: R$ {float(valor):,.2f}", ln=True, align='R')
-        pdf.set_y(275); pdf.set_font("Arial", 'I', 8); pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 10, f"Autenticado via SaarteSvm System - ID: {doc_id}", align='C')
+            pdf.ln(2); pdf.set_font("Arial", 'B', 10); pdf.cell(0, 8, f"PRAZO DE ENTREGA: {prazo}", ln=True)
+        
+        if "RECIBO" in tipo.upper():
+            pdf.ln(5); pdf.set_font("Arial", 'I', 10)
+            pdf.multi_cell(0, 6, f"Recebemos de {cliente_nome.upper()}, a importancia de R$ {float(valor):,.2f} referente ao servico descrito, dando-lhe plena quitacao.")
+
+        # Rodapé e Valor
+        pdf.set_y(230)
+        pdf.set_font("Arial", 'B', 15); pdf.cell(0, 10, f"VALOR: R$ {float(valor):,.2f}", ln=True, align='R')
+        pdf.set_y(250); pdf.line(60, pdf.get_y(), 150, pdf.get_y())
+        pdf.set_font("Arial", '', 9); pdf.cell(0, 5, info[0], ln=True, align='C')
+        pdf.cell(0, 5, f"CONTATO: {info[2]}", ln=True, align='C')
+        pdf.set_y(275); pdf.set_font("Arial", 'I', 7); pdf.set_text_color(150, 150, 150)
+        pdf.cell(0, 10, f"Autenticacao: {doc_id} | SaarteSvm System", align='C')
+        
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# --- 4. INTERFACE (RE-CONECTADA E LACRADA) ---
+# --- 4. INTERFACE PRINCIPAL (LACRADA) ---
 def main():
     aplicar_estilo()
     info_sidebar = buscar_dados_empresa()
@@ -85,21 +110,13 @@ def main():
         st.title(f"⚜️ Painel {info_sidebar[0]}")
         res = supabase.table("projetos_saartesvm").select("*").execute()
         df = pd.DataFrame(res.data)
-        caixa = 0.0; a_receber = 0.0
-        
+        caixa, a_receber = 0.0, 0.0
         if not df.empty:
             for _, r in df.iterrows():
-                # LÓGICA DE SOMA RE-ESTABELECIDA COM FOCO TOTAL
-                v_total = float(r.get('valor_total', 0) or 0)
-                v_entrada = float(r.get('valor_entrada', 0) or 0)
-                
-                if r['status'] == 'Pago':
-                    caixa += v_total
-                    a_receber += 0.0
-                else:
-                    caixa += v_entrada
-                    a_receber += (v_total - v_entrada)
-        
+                v_t = float(r.get('valor_total', 0) or 0)
+                v_e = float(r.get('valor_entrada', 0) or 0)
+                if r['status'] == 'Pago': caixa += v_t
+                else: caixa += v_e; a_receber += (v_t - v_e)
         c1, c2 = st.columns(2)
         with c1: st.metric("Dinheiro em Caixa", f"R$ {caixa:,.2f}")
         with c2: st.metric("A Receber", f"R$ {a_receber:,.2f}")
@@ -112,14 +129,12 @@ def main():
             end_cli = st.text_input("Endereço Completo")
             prz_exec = st.text_input("Prazo de Execução")
             ser = st.text_area("Serviço")
-            v_total = st.number_input("Valor Total do Orçamento", min_value=0.0, step=0.01)
+            v_total = st.number_input("Valor Total", min_value=0.0, step=0.01)
             if st.form_submit_button("GERAR E SALVAR"):
                 if n and ser:
-                    # Inicia com entrada zerada conforme sua ordem
                     dados = {"cliente": n, "nome_projeto": ser, "valor_total": v_total, "valor_entrada": 0, "valor_final": v_total, "prazo_execucao": prz_exec, "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli}
                     supabase.table("projetos_saartesvm").insert(dados).execute()
-                    st.success("Salvo com Sucesso!"); st.rerun()
-                else: st.error("Preencha os campos.")
+                    st.success("Salvo!"); st.rerun()
 
     elif escolha == "Gestão de Projetos":
         st.title("⚜️ Gestão e Documentação")
@@ -134,16 +149,14 @@ def main():
                     eend = st.text_input("Endereço", value=r.get('endereco_cliente', ''))
                     eprz = st.text_input("Prazo", value=r.get('prazo_execucao', ''))
                     eser = st.text_area("Serviço", value=r['nome_projeto'])
-                    
                     col_v1, col_v2 = st.columns(2)
                     ev_t = col_v1.number_input("Valor Real (Total)", value=float(r['valor_total']))
                     ev_e = col_v2.number_input("Entrada Inserida", value=float(r.get('valor_entrada', 0)))
-                    
                     estatus = st.selectbox("Status", ["Pendente", "Pago"], index=0 if r['status'] == "Pendente" else 1)
-                    if st.form_submit_button("ATUALIZAR E SINCRONIZAR"):
+                    if st.form_submit_button("ATUALIZAR"):
                         up = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": (ev_t - ev_e), "status": estatus, "prazo_execucao": eprz}
                         supabase.table("projetos_saartesvm").update(up).eq("id", r['id']).execute()
-                        st.success("Sincronizado com o Painel!"); st.rerun()
+                        st.success("Sincronizado!"); st.rerun()
                 
                 if st.button(f"🗑️ EXCLUIR PROJETO", key=f"del_{r['id']}"):
                     supabase.table("projetos_saartesvm").delete().eq("id", r['id']).execute()
@@ -151,14 +164,15 @@ def main():
 
                 st.write("---")
                 doc1, doc2, doc3, doc4 = st.columns(4)
-                pdf_orc = gerar_documento_pdf("Orcamento", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
-                doc1.download_button("📄 Orçamento", pdf_orc, f"Orc_{r['id']}.pdf", key=f"d_orc_{r['id']}")
-                pdf_ent = gerar_documento_pdf("Recibo Entrada", r['cliente'], r['nome_projeto'], r.get('valor_entrada', 0), r['id'], r.get('prazo_execucao', ''))
-                doc2.download_button("💰 Recibo Entrada", pdf_ent, f"Ent_{r['id']}.pdf", key=f"d_ent_{r['id']}")
-                pdf_fin = gerar_documento_pdf("Recibo Final", r['cliente'], r['nome_projeto'], (float(r['valor_total']) - float(r.get('valor_entrada', 0))), r['id'], r.get('prazo_execucao', ''))
-                doc3.download_button("✅ Recibo Final", pdf_fin, f"Fin_{r['id']}.pdf", key=f"d_fin_{r['id']}")
-                pdf_tot = gerar_documento_pdf("Recibo Total", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
-                doc4.download_button("💎 Recibo Total", pdf_tot, f"Tot_{r['id']}.pdf", key=f"d_tot_{r['id']}")
+                info_pdf = {"tel": r.get('whatsapp', ''), "doc": r.get('cpf_cnpj', ''), "end": r.get('endereco_cliente', '')}
+                pdf_orc = gerar_documento_pdf("Orcamento", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''), **info_pdf)
+                doc1.download_button("📄 Orçamento", pdf_orc, f"Orc_{r['id']}.pdf")
+                pdf_ent = gerar_documento_pdf("Recibo Entrada", r['cliente'], r['nome_projeto'], r.get('valor_entrada', 0), r['id'], r.get('prazo_execucao', ''), **info_pdf)
+                doc2.download_button("💰 Entrada", pdf_ent, f"Ent_{r['id']}.pdf")
+                pdf_fin = gerar_documento_pdf("Recibo Final", r['cliente'], r['nome_projeto'], (float(r['valor_total']) - float(r.get('valor_entrada', 0))), r['id'], r.get('prazo_execucao', ''), **info_pdf)
+                doc3.download_button("✅ Final", pdf_fin, f"Fin_{r['id']}.pdf")
+                pdf_tot = gerar_documento_pdf("Recibo Total", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''), **info_pdf)
+                doc4.download_button("💎 Total", pdf_tot, f"Tot_{r['id']}.pdf")
 
     elif escolha == "Configurações":
         st.title("⚙️ Configurações")
