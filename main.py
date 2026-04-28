@@ -5,7 +5,7 @@ from fpdf import FPDF
 import os
 from supabase import create_client, Client
 
-# --- 1. CONEXÃO E ESTRUTURA (LACRE TOTAL) ---
+# --- 1. CONEXÃO E ESTRUTURA (TOTALMENTE LACRADO) ---
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
 @st.cache_resource
@@ -17,7 +17,7 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
-# --- 2. ESTILO VISUAL PREMIUM (LACRADO - NADA MUDA) ---
+# --- 2. ESTILO VISUAL PREMIUM (INVIOLÁVEL) ---
 def aplicar_estilo():
     st.markdown("""
         <style>
@@ -45,7 +45,7 @@ def buscar_dados_empresa():
     except: pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# --- 3. MOTOR DE PDF (LACRADO EM UMA FOLHA) ---
+# --- 3. MOTOR DE PDF (FOLHA ÚNICA LACRADA) ---
 def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
     try:
         info = buscar_dados_empresa()
@@ -73,7 +73,7 @@ def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# --- 4. INTERFACE PRINCIPAL (CORREÇÃO DETALHISTA) ---
+# --- 4. INTERFACE (RE-CONECTADA E LACRADA) ---
 def main():
     aplicar_estilo()
     info_sidebar = buscar_dados_empresa()
@@ -86,17 +86,22 @@ def main():
         res = supabase.table("projetos_saartesvm").select("*").execute()
         df = pd.DataFrame(res.data)
         caixa = 0.0; a_receber = 0.0
+        
         if not df.empty:
             for _, r in df.iterrows():
+                # LÓGICA DE SOMA RE-ESTABELECIDA COM FOCO TOTAL
                 v_total = float(r.get('valor_total', 0) or 0)
                 v_entrada = float(r.get('valor_entrada', 0) or 0)
+                
                 if r['status'] == 'Pago':
                     caixa += v_total
+                    a_receber += 0.0
                 else:
                     caixa += v_entrada
                     a_receber += (v_total - v_entrada)
+        
         c1, c2 = st.columns(2)
-        with c1: st.metric("Total em Caixa", f"R$ {caixa:,.2f}")
+        with c1: st.metric("Dinheiro em Caixa", f"R$ {caixa:,.2f}")
         with c2: st.metric("A Receber", f"R$ {a_receber:,.2f}")
 
     elif escolha == "Novo Job":
@@ -107,14 +112,14 @@ def main():
             end_cli = st.text_input("Endereço Completo")
             prz_exec = st.text_input("Prazo de Execução")
             ser = st.text_area("Serviço")
-            # --- CAMPO ÚNICO COMO NO PJ GOLD ---
             v_total = st.number_input("Valor Total do Orçamento", min_value=0.0, step=0.01)
             if st.form_submit_button("GERAR E SALVAR"):
                 if n and ser:
+                    # Inicia com entrada zerada conforme sua ordem
                     dados = {"cliente": n, "nome_projeto": ser, "valor_total": v_total, "valor_entrada": 0, "valor_final": v_total, "prazo_execucao": prz_exec, "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli}
                     supabase.table("projetos_saartesvm").insert(dados).execute()
-                    st.success("Salvo com Sucesso!")
-                else: st.error("Campos obrigatórios.")
+                    st.success("Salvo com Sucesso!"); st.rerun()
+                else: st.error("Preencha os campos.")
 
     elif escolha == "Gestão de Projetos":
         st.title("⚜️ Gestão e Documentação")
@@ -130,17 +135,15 @@ def main():
                     eprz = st.text_input("Prazo", value=r.get('prazo_execucao', ''))
                     eser = st.text_area("Serviço", value=r['nome_projeto'])
                     
-                    # --- SOMENTE VALOR REAL E ENTRADA (LIMPEZA CIRÚRGICA) ---
                     col_v1, col_v2 = st.columns(2)
                     ev_t = col_v1.number_input("Valor Real (Total)", value=float(r['valor_total']))
-                    ev_e = col_v2.number_input("Valor de Entrada", value=float(r.get('valor_entrada', 0)))
+                    ev_e = col_v2.number_input("Entrada Inserida", value=float(r.get('valor_entrada', 0)))
                     
                     estatus = st.selectbox("Status", ["Pendente", "Pago"], index=0 if r['status'] == "Pendente" else 1)
-                    if st.form_submit_button("ATUALIZAR DADOS"):
-                        # Cálculo automático do saldo final para o banco de dados
+                    if st.form_submit_button("ATUALIZAR E SINCRONIZAR"):
                         up = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": (ev_t - ev_e), "status": estatus, "prazo_execucao": eprz}
                         supabase.table("projetos_saartesvm").update(up).eq("id", r['id']).execute()
-                        st.success("Atualizado!"); st.rerun()
+                        st.success("Sincronizado com o Painel!"); st.rerun()
                 
                 if st.button(f"🗑️ EXCLUIR PROJETO", key=f"del_{r['id']}"):
                     supabase.table("projetos_saartesvm").delete().eq("id", r['id']).execute()
