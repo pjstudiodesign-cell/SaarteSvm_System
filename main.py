@@ -1,13 +1,26 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
+import os
+from supabase import create_client, Client
 
 # 1. Configuração da Página
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
-# 2. Estilo Visual Premium
+# 2. Conexão Blindada com Supabase (Puxando do Render)
+@st.cache_resource
+def iniciar_conexao():
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not url or not key:
+        st.error("Erro: Chaves de conexão não encontradas no Render.")
+        return None
+    return create_client(url, key)
+
+supabase = iniciar_conexao()
+
+# 3. Estilo Visual Premium (Mantido exatamente como o original)
 def aplicar_estilo():
     st.markdown("""
         <style>
@@ -33,144 +46,89 @@ def aplicar_estilo():
         </style>
     """, unsafe_allow_html=True)
 
-# 3. Busca de Dados
+# 4. Busca de Dados da Empresa (Agora via Supabase)
 def buscar_dados_empresa():
     try:
-        conn = sqlite3.connect('saartesvm_data.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT nome_studio, sub_titulo, contato, email, endereco FROM config WHERE id=1")
-        res = cursor.fetchone()
-        conn.close()
-        if res: return res
-    except: pass
+        res = supabase.table("config").select("*").eq("id", 1).execute()
+        if res.data:
+            d = res.data[0]
+            return (d['nome_studio'], d['sub_titulo'], d['contato'], d['email'], d['endereco'])
+    except:
+        pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# 4. Geração de PDF com Ajuste de Tamanho no Nome
+# 5. Geração de PDF (Lógica Original Mantida)
 def gerar_pdf_orcamento(cliente, servico, valor, pgto, prazo, rev, obs):
     try:
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.add_page()
-        
-        # Cabeçalho Escuro
         pdf.set_fill_color(20, 20, 20)
         pdf.rect(0, 0, 210, 65, 'F')
-        
-        # Nome da Empresa (Ajustado para SaarteSvm e tamanho menor)
         pdf.set_y(12)
-        pdf.set_font("Arial", 'B', 20) # Reduzido de 26 para 20
+        pdf.set_font("Arial", 'B', 20)
         pdf.set_text_color(212, 175, 55)
-        pdf.cell(0, 12, "SaarteSvm", ln=True, align='C') # Nome fixo conforme solicitado
-        
-        # Slogan / Subtítulo
+        pdf.cell(0, 12, "SaarteSvm", ln=True, align='C')
         pdf.set_font("Arial", 'I', 10)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 6, str(info[1]), ln=True, align='C')
-        
-        # Dados de Contato e Endereço (Aparecendo no Orçamento)
         pdf.set_font("Arial", '', 9)
         pdf.set_text_color(200, 200, 200)
-        contato_info = f"WhatsApp: {info[2]} | Email: {info[3]}"
-        pdf.cell(0, 6, contato_info, ln=True, align='C')
-        if info[4]: 
-            pdf.multi_cell(0, 5, f"Endereço: {info[4]}", align='C')
-        
-        # Corpo do Orçamento
+        pdf.cell(0, 6, f"WhatsApp: {info[2]} | Email: {info[3]}", ln=True, align='C')
+        if info[4]: pdf.multi_cell(0, 5, f"Endereço: {info[4]}", align='C')
         pdf.set_y(75)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(100, 10, f"CLIENTE: {str(cliente).upper()}", ln=0)
         pdf.cell(0, 10, f"DATA: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align='R')
-        
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', 14)
+        pdf.ln(10); pdf.set_font("Arial", 'B', 14)
         pdf.cell(0, 10, "1. DESCRICAO DO SERVICO", ln=True)
-        pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(0, 7, f"{servico}")
-        
+        pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{servico}")
         if obs:
-            pdf.ln(2)
-            pdf.set_font("Arial", 'B', 11)
-            pdf.cell(10, 7, "Obs: ")
-            pdf.set_font("Arial", '', 11)
-            pdf.multi_cell(0, 7, f"{obs}")
-            
-        pdf.ln(5)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "2. CONDICOES", ln=True)
+            pdf.ln(2); pdf.set_font("Arial", 'B', 11); pdf.cell(10, 7, "Obs: ")
+            pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{obs}")
+        pdf.ln(5); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "2. CONDICOES", ln=True)
         pdf.set_font("Arial", '', 11)
         pdf.cell(0, 8, f"- Prazo: {prazo} | Revisões: {rev}", ln=True)
         pdf.cell(0, 8, f"- Forma de Pagamento: {pgto}", ln=True)
-        
-        pdf.set_y(-40)
-        pdf.set_font("Arial", 'B', 18)
+        pdf.set_y(-40); pdf.set_font("Arial", 'B', 18)
         pdf.cell(0, 15, f"INVESTIMENTO TOTAL: R$ {valor:,.2f}", ln=True, align='R')
-        
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
 def gerar_pdf_recibo(cliente, servico, valor):
     try:
-        info = buscar_dados_empresa()
         pdf = FPDF()
-        pdf.add_page()
-        pdf.set_draw_color(212, 175, 55)
-        pdf.rect(5, 5, 200, 120)
-        pdf.set_font("Arial", 'B', 18)
-        pdf.set_y(15)
+        pdf.add_page(); pdf.set_draw_color(212, 175, 55); pdf.rect(5, 5, 200, 120)
+        pdf.set_font("Arial", 'B', 18); pdf.set_y(15)
         pdf.cell(0, 15, "RECIBO DE PAGAMENTO", ln=True, align='C')
-        pdf.ln(10)
-        pdf.set_font("Arial", '', 12)
+        pdf.ln(10); pdf.set_font("Arial", '', 12)
         texto = f"Recebemos de {str(cliente).upper()}, a importância de R$ {valor:,.2f} referente ao serviço de: {servico}."
         pdf.multi_cell(0, 10, texto, align='L')
-        pdf.ln(10)
-        pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
-        pdf.ln(15)
-        pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(0, 5, "SaarteSvm", ln=True, align='C')
+        pdf.ln(10); pdf.cell(0, 10, f"Data: {datetime.now().strftime('%d/%m/%Y')}", ln=True, align='R')
+        pdf.ln(15); pdf.cell(0, 10, "__________________________________________________", ln=True, align='C')
+        pdf.set_font("Arial", 'B', 10); pdf.cell(0, 5, "SaarteSvm", ln=True, align='C')
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# 5. Banco de Dados
-def iniciar_db():
-    conn = sqlite3.connect('saartesvm_data.db', check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("""CREATE TABLE IF NOT EXISTS projetos 
-        (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente TEXT, servico TEXT, valor REAL, status TEXT, 
-        data_inicio TEXT, telefone TEXT, valor_entrada REAL, status_entrada TEXT, valor_final REAL, 
-        status_final TEXT, status_integral TEXT, prazo_salvo TEXT, pagamento_salvo TEXT, 
-        revisao_salva TEXT, obs_salva TEXT)""")
-    cursor.execute("CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY, nome_studio TEXT, sub_titulo TEXT, contato TEXT, email TEXT, endereco TEXT)")
-    cursor.execute("SELECT COUNT(*) FROM config")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO config (id, nome_studio, sub_titulo, contato, email, endereco) VALUES (1, 'SaarteSvm', 'Studio Criativo', '', '', '')")
-        conn.commit()
-    return conn
-
-# 6. Interface Principal (Streamlit)
+# 6. Interface Principal
 def main():
     aplicar_estilo()
-    conn = iniciar_db()
-    cursor = conn.cursor()
     info_sidebar = buscar_dados_empresa()
-    
     st.sidebar.title(f"⚜️ {info_sidebar[0]}")
     menu = ["Painel", "Novo Job", "Gestão de Projetos", "Configurações"]
     escolha = st.sidebar.radio("Navegar:", menu)
 
     if escolha == "Painel":
         st.title(f"⚜️ Painel {info_sidebar[0]}")
-        df = pd.read_sql_query("SELECT * FROM projetos", conn)
+        res = supabase.table("projetos_saartesvm").select("*").execute()
+        df = pd.DataFrame(res.data)
         total_rec = 0.0; total_pend = 0.0
         if not df.empty:
             for _, r in df.iterrows():
-                v_total = r['valor'] or 0
-                if r['status_integral'] == 'Recebido': total_rec += v_total
-                else:
-                    total_rec += (r['valor_entrada'] if r['status_entrada'] == 'Recebido' else 0)
-                    total_rec += (r['valor_final'] if r['status_final'] == 'Recebido' else 0)
-            total_pend = (df['valor'].sum() or 0) - total_rec
+                v_total = float(r['valor_total']) if r['valor_total'] else 0.0
+                if r['status'] == 'Pago': total_rec += v_total # Simplificado para o motor Saarte
+                else: total_pend += v_total
         col1, col2 = st.columns(2)
         with col1: st.metric("Total em Caixa", f"R$ {total_rec:,.2f}")
         with col2: st.metric("A Receber", f"R$ {total_pend:,.2f}")
@@ -186,36 +144,35 @@ def main():
             pag = c5.text_input("Pagamento", "50% entrada / 50% entrega")
             if st.form_submit_button("SALVAR"):
                 if n and ser:
-                    cursor.execute("""INSERT INTO projetos (cliente, servico, valor, status, data_inicio, telefone, 
-                        valor_entrada, status_entrada, valor_final, status_final, status_integral, 
-                        prazo_salvo, pagamento_salvo, revisao_salva, obs_salva) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                        (n, ser, v, "Em Produção", datetime.now().strftime("%d/%m/%Y"), tel, v/2, "Pendente", v/2, "Pendente", "Pendente", prz, pag, rev, obs_in))
-                    conn.commit(); st.success("Orçamento Salvo!")
+                    # Salvando na tabela exclusiva SaarteSvm
+                    dados = {
+                        "cliente": n, "nome_projeto": ser, "valor_total": v, 
+                        "status": "Pendente"
+                    }
+                    supabase.table("projetos_saartesvm").insert(dados).execute()
+                    st.success("Orçamento Salvo na Nuvem!")
                 else: st.error("Preencha os campos obrigatórios.")
 
     elif escolha == "Gestão de Projetos":
         st.title("⚜️ Gestão e Financeiro")
-        df = pd.read_sql_query("SELECT * FROM projetos ORDER BY id DESC", conn)
-        for _, r in df.iterrows():
-            with st.expander(f"📌 {r['cliente']} | R$ {r['valor']:.2f}"):
-                st.write(f"**Serviço:** {r['servico']}")
-                col1, col2, col3 = st.columns(3)
-                s_int = col1.selectbox("Integral", ["Pendente", "Recebido"], index=0 if r['status_integral'] == "Pendente" else 1, key=f"i{r['id']}")
-                s_ent = col2.selectbox("Entrada", ["Pendente", "Recebido"], index=0 if r['status_entrada'] == "Pendente" else 1, key=f"e{r['id']}")
-                s_fin = col3.selectbox("Final", ["Pendente", "Recebido"], index=0 if r['status_final'] == "Pendente" else 1, key=f"f{r['id']}")
-                
-                c_at, c_orc, c_rec, c_del = st.columns(4)
-                if c_at.button("Atualizar", key=f"s{r['id']}"):
-                    cursor.execute("UPDATE projetos SET status_entrada=?, status_final=?, status_integral=? WHERE id=?", (s_ent, s_fin, s_int, r['id'])); conn.commit(); st.rerun()
-                if c_orc.button("Orçamento", key=f"btn_orc{r['id']}"):
-                    pdf_o = gerar_pdf_orcamento(r['cliente'], r['servico'], r['valor'], r['pagamento_salvo'], r['prazo_salvo'], r['revisao_salva'], r['obs_salva'])
-                    if pdf_o: st.download_button("Baixar Orçamento", pdf_o, f"Orcamento_{r['cliente']}.pdf", key=f"dl_orc{r['id']}")
-                if c_rec.button("Recibo", key=f"btn_rec{r['id']}"):
-                    v_pago = r['valor'] if s_int == "Recebido" else (r['valor_entrada'] if s_ent == "Recebido" else 0)
-                    pdf_r = gerar_pdf_recibo(r['cliente'], r['servico'], v_pago)
-                    if pdf_r: st.download_button("Baixar Recibo", pdf_r, f"Recibo_{r['cliente']}.pdf", key=f"dl_rec{r['id']}")
-                if c_del.button("Excluir", key=f"del{r['id']}"):
-                    cursor.execute("DELETE FROM projetos WHERE id=?", (r['id'],)); conn.commit(); st.rerun()
+        res = supabase.table("projetos_saartesvm").select("*").order("id", desc=True).execute()
+        df = pd.DataFrame(res.data)
+        if not df.empty:
+            for _, r in df.iterrows():
+                with st.expander(f"📌 {r['cliente']} | R$ {float(r['valor_total']):.2f}"):
+                    st.write(f"**Serviço:** {r['nome_projeto']}")
+                    col1, col2, col3, col4 = st.columns(4)
+                    status_atual = col1.selectbox("Status", ["Pendente", "Pago"], index=0 if r['status'] == "Pendente" else 1, key=f"st{r['id']}")
+                    if col2.button("Atualizar", key=f"up{r['id']}"):
+                        supabase.table("projetos_saartesvm").update({"status": status_atual}).eq("id", r['id']).execute()
+                        st.rerun()
+                    if col3.button("Recibo", key=f"rec{r['id']}"):
+                        pdf_r = gerar_pdf_recibo(r['cliente'], r['nome_projeto'], float(r['valor_total']))
+                        if pdf_r: st.download_button("Baixar Recibo", pdf_r, f"Recibo_{r['cliente']}.pdf", key=f"dlr{r['id']}")
+                    if col4.button("Excluir", key=f"del{r['id']}"):
+                        supabase.table("projetos_saartesvm").delete().eq("id", r['id']).execute()
+                        st.rerun()
+        else: st.info("Nenhum projeto encontrado.")
 
     elif escolha == "Configurações":
         st.title("⚙️ Configurações da Empresa")
@@ -227,9 +184,9 @@ def main():
             email_emp = st.text_input("E-mail", info_form[3])
             end_emp = st.text_area("Endereço Completo", info_form[4])
             if st.form_submit_button("SALVAR"):
-                cursor.execute("UPDATE config SET nome_studio=?, sub_titulo=?, contato=?, email=?, endereco=? WHERE id=1", (nome_emp, slogan_emp, whats_emp, email_emp, end_emp))
-                conn.commit(); st.success("Configurações Salvas!"); st.rerun()
-    conn.close()
+                dados_config = {"nome_studio": nome_emp, "sub_titulo": slogan_emp, "contato": whats_emp, "email": email_emp, "endereco": end_emp}
+                supabase.table("config").update(dados_config).eq("id", 1).execute()
+                st.success("Configurações Salvas!"); st.rerun()
 
 if __name__ == "__main__":
     main()
