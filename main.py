@@ -5,7 +5,7 @@ from fpdf import FPDF
 import os
 from supabase import create_client, Client
 
-# 1. Configuração e Conexão (ESTADO ORIGINAL)
+# --- 1. CONEXÃO E ESTRUTURA (LACRE TOTAL) ---
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
 @st.cache_resource
@@ -17,7 +17,7 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
-# 2. Estilo Visual Premium (ORIGINAL/LACRADO)
+# --- 2. ESTILO VISUAL PREMIUM (LACRADO - NADA MUDA) ---
 def aplicar_estilo():
     st.markdown("""
         <style>
@@ -45,7 +45,7 @@ def buscar_dados_empresa():
     except: pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# 3. Motor de PDF (ORIGINAL/LACRADO)
+# --- 3. MOTOR DE PDF (LACRADO EM UMA FOLHA) ---
 def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
     try:
         info = buscar_dados_empresa()
@@ -73,7 +73,7 @@ def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# 4. Interface Principal (TUDO VOLTOU AO ORIGINAL)
+# --- 4. INTERFACE PRINCIPAL (CORREÇÃO DETALHISTA) ---
 def main():
     aplicar_estilo()
     info_sidebar = buscar_dados_empresa()
@@ -95,9 +95,9 @@ def main():
                 else:
                     caixa += v_entrada
                     a_receber += (v_total - v_entrada)
-        col1, col2 = st.columns(2)
-        with col1: st.metric("Total em Caixa", f"R$ {caixa:,.2f}")
-        with col2: st.metric("A Receber", f"R$ {a_receber:,.2f}")
+        c1, c2 = st.columns(2)
+        with c1: st.metric("Total em Caixa", f"R$ {caixa:,.2f}")
+        with c2: st.metric("A Receber", f"R$ {a_receber:,.2f}")
 
     elif escolha == "Novo Job":
         st.title("⚜️ Novo Orçamento")
@@ -107,18 +107,14 @@ def main():
             end_cli = st.text_input("Endereço Completo")
             prz_exec = st.text_input("Prazo de Execução")
             ser = st.text_area("Serviço")
-            c4, c5, c6 = st.columns(3)
-            # CAMPOS ORIGINAIS RESTAURADOS
-            v_total = c4.number_input("Valor Total", min_value=0.0, step=0.01)
-            v_ent = c5.number_input("Entrada", value=v_total/2)
-            v_fin = c6.number_input("Final", value=v_total - v_ent)
-            
+            # --- CAMPO ÚNICO COMO NO PJ GOLD ---
+            v_total = st.number_input("Valor Total do Orçamento", min_value=0.0, step=0.01)
             if st.form_submit_button("GERAR E SALVAR"):
                 if n and ser:
-                    dados = {"cliente": n, "nome_projeto": ser, "valor_total": v_total, "valor_entrada": v_ent, "valor_final": v_fin, "prazo_execucao": prz_exec, "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli}
+                    dados = {"cliente": n, "nome_projeto": ser, "valor_total": v_total, "valor_entrada": 0, "valor_final": v_total, "prazo_execucao": prz_exec, "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli}
                     supabase.table("projetos_saartesvm").insert(dados).execute()
-                    st.success("Salvo!")
-                else: st.error("Erro.")
+                    st.success("Salvo com Sucesso!")
+                else: st.error("Campos obrigatórios.")
 
     elif escolha == "Gestão de Projetos":
         st.title("⚜️ Gestão e Documentação")
@@ -133,15 +129,18 @@ def main():
                     eend = st.text_input("Endereço", value=r.get('endereco_cliente', ''))
                     eprz = st.text_input("Prazo", value=r.get('prazo_execucao', ''))
                     eser = st.text_area("Serviço", value=r['nome_projeto'])
-                    ec4, ec5, ec6 = st.columns(3)
-                    ev_t = ec4.number_input("Valor Total", value=float(r['valor_total']))
-                    ev_e = ec5.number_input("Entrada", value=float(r.get('valor_entrada', 0)))
-                    ev_f = ec6.number_input("Final", value=float(r.get('valor_final', 0)))
+                    
+                    # --- SOMENTE VALOR REAL E ENTRADA (LIMPEZA CIRÚRGICA) ---
+                    col_v1, col_v2 = st.columns(2)
+                    ev_t = col_v1.number_input("Valor Real (Total)", value=float(r['valor_total']))
+                    ev_e = col_v2.number_input("Valor de Entrada", value=float(r.get('valor_entrada', 0)))
+                    
                     estatus = st.selectbox("Status", ["Pendente", "Pago"], index=0 if r['status'] == "Pendente" else 1)
-                    if st.form_submit_button("ATUALIZAR"):
-                        up = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": ev_f, "status": estatus, "prazo_execucao": eprz}
+                    if st.form_submit_button("ATUALIZAR DADOS"):
+                        # Cálculo automático do saldo final para o banco de dados
+                        up = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": (ev_t - ev_e), "status": estatus, "prazo_execucao": eprz}
                         supabase.table("projetos_saartesvm").update(up).eq("id", r['id']).execute()
-                        st.success("Ok!"); st.rerun()
+                        st.success("Atualizado!"); st.rerun()
                 
                 if st.button(f"🗑️ EXCLUIR PROJETO", key=f"del_{r['id']}"):
                     supabase.table("projetos_saartesvm").delete().eq("id", r['id']).execute()
@@ -153,7 +152,7 @@ def main():
                 doc1.download_button("📄 Orçamento", pdf_orc, f"Orc_{r['id']}.pdf", key=f"d_orc_{r['id']}")
                 pdf_ent = gerar_documento_pdf("Recibo Entrada", r['cliente'], r['nome_projeto'], r.get('valor_entrada', 0), r['id'], r.get('prazo_execucao', ''))
                 doc2.download_button("💰 Recibo Entrada", pdf_ent, f"Ent_{r['id']}.pdf", key=f"d_ent_{r['id']}")
-                pdf_fin = gerar_documento_pdf("Recibo Final", r['cliente'], r['nome_projeto'], r.get('valor_final', 0), r['id'], r.get('prazo_execucao', ''))
+                pdf_fin = gerar_documento_pdf("Recibo Final", r['cliente'], r['nome_projeto'], (float(r['valor_total']) - float(r.get('valor_entrada', 0))), r['id'], r.get('prazo_execucao', ''))
                 doc3.download_button("✅ Recibo Final", pdf_fin, f"Fin_{r['id']}.pdf", key=f"d_fin_{r['id']}")
                 pdf_tot = gerar_documento_pdf("Recibo Total", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
                 doc4.download_button("💎 Recibo Total", pdf_tot, f"Tot_{r['id']}.pdf", key=f"d_tot_{r['id']}")
