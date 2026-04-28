@@ -5,7 +5,7 @@ from fpdf import FPDF
 import os
 from supabase import create_client, Client
 
-# 1. Configuração e Conexão (LACRADO)
+# 1. Configuração e Conexão
 st.set_page_config(page_title="SaarteSvm System", page_icon="⚜️", layout="wide")
 
 @st.cache_resource
@@ -17,7 +17,7 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
-# 2. Estilo Visual Premium (EXTREMAMENTE LACRADO - NADA MUDA)
+# 2. Estilo Visual Original (LACRADO)
 def aplicar_estilo():
     st.markdown("""
         <style>
@@ -45,7 +45,7 @@ def buscar_dados_empresa():
     except: pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# 3. Motor de PDF (LACRADO NA PRIMEIRA FOLHA)
+# 3. Motor de PDF (UMA FOLHA)
 def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
     try:
         info = buscar_dados_empresa()
@@ -73,7 +73,7 @@ def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except: return None
 
-# 4. Interface Principal e Lógica de Cálculo (ÁREA CORRIGIDA E BLINDADA)
+# 4. Interface e Logica Corrigida
 def main():
     aplicar_estilo()
     info_sidebar = buscar_dados_empresa()
@@ -85,26 +85,19 @@ def main():
         st.title(f"⚜️ Painel {info_sidebar[0]}")
         res = supabase.table("projetos_saartesvm").select("*").execute()
         df = pd.DataFrame(res.data)
-        
-        caixa_real = 0.0
-        a_receber_real = 0.0
-        
+        caixa = 0.0; a_receber = 0.0
         if not df.empty:
             for _, r in df.iterrows():
-                # LÓGICA CIRÚRGICA: Soma o que já foi pago (entrada) e o que resta (final)
-                v_entrada = float(r.get('valor_entrada', 0) or 0)
-                v_final = float(r.get('valor_final', 0) or 0)
                 v_total = float(r.get('valor_total', 0) or 0)
-                
+                v_entrada = float(r.get('valor_entrada', 0) or 0)
                 if r['status'] == 'Pago':
-                    caixa_real += v_total # Se está Pago, tudo está no caixa
+                    caixa += v_total
                 else:
-                    caixa_real += v_entrada # Se Pendente, apenas a entrada está no caixa
-                    a_receber_real += v_final # O restante vai para A Receber
-        
+                    caixa += v_entrada
+                    a_receber += (v_total - v_entrada) # CORREÇÃO CIRÚRGICA
         col1, col2 = st.columns(2)
-        with col1: st.metric("Total em Caixa (Dinheiro no Bolso)", f"R$ {caixa_real:,.2f}")
-        with col2: st.metric("A Receber (Diferença)", f"R$ {a_receber_real:,.2f}")
+        with col1: st.metric("Total em Caixa", f"R$ {caixa:,.2f}")
+        with col2: st.metric("A Receber", f"R$ {a_receber:,.2f}")
 
     elif escolha == "Novo Job":
         st.title("⚜️ Novo Orçamento")
@@ -116,19 +109,14 @@ def main():
             ser = st.text_area("Serviço")
             c4, c5, c6 = st.columns(3)
             v_total = c4.number_input("Valor Total", min_value=0.0, step=0.01)
-            v_ent = c5.number_input("Entrada Recebida", value=v_total/2)
-            v_fin = c6.number_input("Valor a Receber", value=v_total - v_ent)
-            
+            v_ent = c5.number_input("Entrada", value=v_total/2)
+            v_fin = c6.number_input("Final", value=v_total - v_ent)
             if st.form_submit_button("GERAR E SALVAR"):
                 if n and ser:
-                    dados = {
-                        "cliente": n, "nome_projeto": ser, "valor_total": v_total,
-                        "valor_entrada": v_ent, "valor_final": v_fin, "prazo_execucao": prz_exec,
-                        "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli
-                    }
+                    dados = {"cliente": n, "nome_projeto": ser, "valor_total": v_total, "valor_entrada": v_ent, "valor_final": v_fin, "prazo_execucao": prz_exec, "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli}
                     supabase.table("projetos_saartesvm").insert(dados).execute()
-                    st.success("Projeto Registrado! Contabilidade Atualizada.")
-                else: st.error("Campos obrigatórios.")
+                    st.success("Salvo!")
+                else: st.error("Campos faltando.")
 
     elif escolha == "Gestão de Projetos":
         st.title("⚜️ Gestão e Documentação")
@@ -145,33 +133,35 @@ def main():
                     eser = st.text_area("Serviço", value=r['nome_projeto'])
                     ec4, ec5, ec6 = st.columns(3)
                     ev_t = ec4.number_input("Valor Total", value=float(r['valor_total']))
-                    ev_e = ec5.number_input("Entrada Paga", value=float(r.get('valor_entrada', 0)))
-                    ev_f = ec6.number_input("Saldo Devedor", value=float(r.get('valor_final', 0)))
-                    estatus = st.selectbox("Status Final", ["Pendente", "Pago"], index=0 if r['status'] == "Pendente" else 1)
-                    
-                    if st.form_submit_button("ATUALIZAR DADOS"):
-                        up = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, 
-                              "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": ev_f, "status": estatus, "prazo_execucao": eprz}
+                    ev_e = ec5.number_input("Entrada", value=float(r.get('valor_entrada', 0)))
+                    ev_f = ec6.number_input("Final", value=float(r.get('valor_final', 0)))
+                    estatus = st.selectbox("Status", ["Pendente", "Pago"], index=0 if r['status'] == "Pendente" else 1)
+                    if st.form_submit_button("ATUALIZAR"):
+                        up = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": ev_f, "status": estatus, "prazo_execucao": eprz}
                         supabase.table("projetos_saartesvm").update(up).eq("id", r['id']).execute()
-                        st.success("Atualizado!")
-                        st.rerun()
+                        st.success("Atualizado!"); st.rerun()
+                
+                # BOTÃO EXCLUIR RESTAURADO (ESTRUTURA ORIGINAL)
+                if st.button(f"🗑️ EXCLUIR PROJETO", key=f"del_{r['id']}"):
+                    supabase.table("projetos_saartesvm").delete().eq("id", r['id']).execute()
+                    st.warning("Excluído!"); st.rerun()
 
                 st.write("---")
                 doc1, doc2, doc3, doc4 = st.columns(4)
                 pdf_orc = gerar_documento_pdf("Orcamento", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
-                doc1.download_button("📄 Orçamento", pdf_orc, f"Orcamento_{r['cliente']}.pdf", key=f"orc_{r['id']}")
+                doc1.download_button("📄 Orçamento", pdf_orc, f"Orc_{r['id']}.pdf", key=f"d_orc_{r['id']}")
                 pdf_ent = gerar_documento_pdf("Recibo Entrada", r['cliente'], r['nome_projeto'], r.get('valor_entrada', 0), r['id'], r.get('prazo_execucao', ''))
-                doc2.download_button("💰 Recibo Entrada", pdf_ent, f"Recibo_Entrada_{r['cliente']}.pdf", key=f"ent_{r['id']}")
+                doc2.download_button("💰 Recibo Entrada", pdf_ent, f"Ent_{r['id']}.pdf", key=f"d_ent_{r['id']}")
                 pdf_fin = gerar_documento_pdf("Recibo Final", r['cliente'], r['nome_projeto'], r.get('valor_final', 0), r['id'], r.get('prazo_execucao', ''))
-                doc3.download_button("✅ Recibo Final", pdf_fin, f"Recibo_Final_{r['cliente']}.pdf", key=f"fin_{r['id']}")
+                doc3.download_button("✅ Recibo Final", pdf_fin, f"Fin_{r['id']}.pdf", key=f"d_fin_{r['id']}")
                 pdf_tot = gerar_documento_pdf("Recibo Total", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
-                doc4.download_button("💎 Recibo Total", pdf_tot, f"Recibo_Total_{r['cliente']}.pdf", key=f"tot_{r['id']}")
+                doc4.download_button("💎 Recibo Total", pdf_tot, f"Tot_{r['id']}.pdf", key=f"d_tot_{r['id']}")
 
     elif escolha == "Configurações":
         st.title("⚙️ Configurações")
         info = buscar_dados_empresa()
         with st.form("conf"):
-            n = st.text_input("Nome Studio", info[0]); s = st.text_input("Slogan", info[1])
+            n = st.text_input("Nome", info[0]); s = st.text_input("Slogan", info[1])
             c = st.text_input("Contato", info[2]); e = st.text_input("Email", info[3])
             end = st.text_area("Endereço", info[4])
             if st.form_submit_button("SALVAR"):
