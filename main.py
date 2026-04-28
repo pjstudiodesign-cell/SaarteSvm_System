@@ -50,13 +50,12 @@ def buscar_dados_empresa():
     except: pass
     return ("SaarteSvm", "Studio Criativo", "", "", "")
 
-# 5. Motor de Geração de Documentos (Orçamento e Recibos)
-def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", data_extra=""):
+# 5. Motor de Geração de Documentos
+def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", prazo=""):
     try:
         info = buscar_dados_empresa()
         pdf = FPDF()
         pdf.add_page()
-        # Cabeçalho Premium
         pdf.set_fill_color(20, 20, 20); pdf.rect(0, 0, 210, 65, 'F')
         pdf.set_y(12); pdf.set_font("Arial", 'B', 20); pdf.set_text_color(212, 175, 55)
         pdf.cell(0, 12, info[0], ln=True, align='C')
@@ -73,6 +72,9 @@ def gerar_documento_pdf(tipo, cliente, servico, valor, doc_id="", data_extra="")
         
         pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "DESCRICAO DO SERVICO", ln=True)
         pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 7, f"{servico}")
+        
+        if prazo:
+            pdf.ln(2); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 10, f"PRAZO DE EXECUCAO: {prazo}", ln=True)
         
         pdf.ln(10); pdf.set_font("Arial", 'B', 16)
         pdf.cell(0, 15, f"VALOR: R$ {float(valor):,.2f}", ln=True, align='R')
@@ -111,6 +113,10 @@ def main():
             c1, c2, c3 = st.columns(3)
             n = c1.text_input("Cliente"); tel = c2.text_input("WhatsApp"); doc = c3.text_input("CPF/CNPJ")
             end_cli = st.text_input("Endereço Completo")
+            
+            # NOVO CAMPO DE PRAZO
+            prz_exec = st.text_input("Prazo de Execução", "Ex: 10 dias úteis")
+            
             ser = st.text_area("Serviço")
             
             c4, c5, c6 = st.columns(3)
@@ -122,7 +128,7 @@ def main():
                 if n and ser:
                     dados = {
                         "cliente": n, "nome_projeto": ser, "valor_total": v_total,
-                        "valor_entrada": v_ent, "valor_final": v_fin,
+                        "valor_entrada": v_ent, "valor_final": v_fin, "prazo_execucao": prz_exec,
                         "status": "Pendente", "whatsapp": tel, "cpf_cnpj": doc, "endereco_cliente": end_cli
                     }
                     supabase.table("projetos_saartesvm").insert(dados).execute()
@@ -135,12 +141,15 @@ def main():
         for r in res.data:
             with st.expander(f"📝 EDITAR: {r['cliente']} | ID: {r['id']}"):
                 with st.form(f"edit_{r['id']}"):
-                    # MESMO FORMULÁRIO DO NOVO JOB PARA CORREÇÃO
                     ec1, ec2, ec3 = st.columns(3)
                     en = ec1.text_input("Cliente", value=r['cliente'])
                     et = ec2.text_input("WhatsApp", value=r.get('whatsapp', ''))
                     edoc = ec3.text_input("CPF/CNPJ", value=r.get('cpf_cnpj', ''))
                     eend = st.text_input("Endereço", value=r.get('endereco_cliente', ''))
+                    
+                    # PRAZO NA GESTÃO PARA EDIÇÃO
+                    eprz = st.text_input("Prazo de Execução", value=r.get('prazo_execucao', ''))
+                    
                     eser = st.text_area("Serviço", value=r['nome_projeto'])
                     
                     ec4, ec5, ec6 = st.columns(3)
@@ -152,7 +161,8 @@ def main():
                     
                     col_btn1, col_btn2 = st.columns(2)
                     if col_btn1.form_submit_button("ATUALIZAR DADOS"):
-                        up_data = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": ev_f, "status": estatus}
+                        up_data = {"cliente": en, "whatsapp": et, "cpf_cnpj": edoc, "endereco_cliente": eend, "nome_projeto": eser, 
+                                   "valor_total": ev_t, "valor_entrada": ev_e, "valor_final": ev_f, "status": estatus, "prazo_execucao": eprz}
                         supabase.table("projetos_saartesvm").update(up_data).eq("id", r['id']).execute()
                         st.rerun()
                     
@@ -160,20 +170,19 @@ def main():
                         supabase.table("projetos_saartesvm").delete().eq("id", r['id']).execute()
                         st.rerun()
                 
-                # ÁREA DE DOCUMENTOS (ORÇAMENTO E RECIBOS)
                 st.write("---")
                 doc1, doc2, doc3, doc4 = st.columns(4)
                 
-                pdf_orc = gerar_documento_pdf("Orcamento", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'])
+                pdf_orc = gerar_documento_pdf("Orcamento", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
                 doc1.download_button("📄 Orçamento", pdf_orc, f"Orcamento_{r['cliente']}.pdf", key=f"orc_{r['id']}")
                 
-                pdf_ent = gerar_documento_pdf("Recibo de Entrada (50%)", r['cliente'], r['nome_projeto'], r.get('valor_entrada', 0), r['id'])
+                pdf_ent = gerar_documento_pdf("Recibo de Entrada (50%)", r['cliente'], r['nome_projeto'], r.get('valor_entrada', 0), r['id'], r.get('prazo_execucao', ''))
                 doc2.download_button("💰 Recibo Entrada", pdf_ent, f"Recibo_Entrada_{r['cliente']}.pdf", key=f"ent_{r['id']}")
                 
-                pdf_fin = gerar_documento_pdf("Recibo de Entrega (50%)", r['cliente'], r['nome_projeto'], r.get('valor_final', 0), r['id'])
+                pdf_fin = gerar_documento_pdf("Recibo de Entrega (50%)", r['cliente'], r['nome_projeto'], r.get('valor_final', 0), r['id'], r.get('prazo_execucao', ''))
                 doc3.download_button("✅ Recibo Final", pdf_fin, f"Recibo_Final_{r['cliente']}.pdf", key=f"fin_{r['id']}")
                 
-                pdf_tot = gerar_documento_pdf("Recibo Quitação Integral", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'])
+                pdf_tot = gerar_documento_pdf("Recibo Quitação Integral", r['cliente'], r['nome_projeto'], r['valor_total'], r['id'], r.get('prazo_execucao', ''))
                 doc4.download_button("💎 Recibo Total", pdf_tot, f"Recibo_Total_{r['cliente']}.pdf", key=f"tot_{r['id']}")
 
     elif escolha == "Configurações":
